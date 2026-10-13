@@ -1,0 +1,100 @@
+// ============================================================
+// POST /api/shopify/webhook/[token]
+//
+// Receives the webhooks a merchant adds by hand in Shopify admin
+// (Settings → Notifications → Webhooks). There is no session and no
+// API key: the unguessable `token` selects the account, and the
+// HMAC over the raw body — keyed by that account's signing secret —
+// proves the request came from Shopify.
+//
+// Shopify gives a delivery five seconds, and removes a webhook that
+// keeps failing, so we acknowledge as soon as the request is
+// authenticated and do the sending in after(). Status codes before
+// the ack are chosen for Shopify's retry behaviour:
+//   404  unknown token            401  bad signature
+//   400  body isn't JSON          503  our DB is unavailable (retry)
+// ============================================================
+
+import { NextResponse, after } from 'next/server';
+
+import { supabaseAdmin } from '@/lib/flows/admin-client';
+import { getShopifyConfigByToken } from '@/lib/shopify/config';
+import { isShopifyTopic } from '@/lib/shopify/events';
+import { processShopifyWebhook } from '@/lib/shopify/process';
+import { verifyShopifyWebhookSignature } from '@/lib/shopify/signature';
+import { decrypt } from '@/lib/whatsapp/encryption';
+
+// Sending runs inside after(); give it the same budget as the
+// WhatsApp webhook.
+export const maxDuration = 60;
+
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ token: string }> }
+) {
+  const { token } = await params;
+  // Raw bytes, not text(): the HMAC is over exactly what Shopify sent.
+  const rawBody = Buffer.from(await request.arrayBuffer());
+
+  const db = supabaseAdmin();
+  const { config, error } = await getShopifyConfigByToken(db, token);
+  if (error) {
+    return NextResponse.json({ error: 'Temporarily unavailable' }, { status: 503 });
+  }
+  if (!config) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
+
+  let secret = '';
+  try {
+    secret = decrypt(config.webhook_secret);
+  } catch (err) {
+    console.error(
+      '[shopify webhook] could not decrypt signing secret:',
+      err instanceof Error ? err.message : err
+    );
+  }
+  const signature = request.headers.get('x-shopify-hmac-sha256');
+  if (!verifyShopifyWebhookSignature(rawBody, signature, secret)) {
+    console.warn('[shopify webhook] rejected: invalid signature');
+    return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+  }
+
+  let payload: unknown;
+  try {
+    payload = JSON.parse(rawBody.toString('utf8'));
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+  }
+
+  const topic = request.headers.get('x-shopify-topic');
+  const webhookId = request.headers.get('x-shopify-webhook-id');
+  const shopDomain = request.headers.get('x-shopify-shop-domain');
+
+  after(async () => {
+    try {
+      const { error: touchErr } = await db
+        .from('shopify_configs')
+        .update({
+          last_webhook_at: new Date().toISOString(),
+          ...(shopDomain && shopDomain !== config.shop_domain
+            ? { shop_domain: shopDomain }
+            : {}),
+        })
+        .eq('id', config.id);
+      if (touchErr) {
+        console.error('[shopify webhook] touch failed:', touchErr.message);
+      }
+
+      // A topic we don't handle, or a paused connection, is still a
+      // successful delivery as far as Shopify is concerned.
+      if (!config.is_active || !isShopifyTopic(topic)) return;
+
+      await processShopifyWebhook(db, config, topic, payload, webhookId);
+    } catch (err) {
+      console.error('[shopify webhook] processing failed:', err);
+    }
+  });
+
+  return NextResponse.json({ status: 'received' });
+}

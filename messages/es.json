@@ -1658,7 +1658,8 @@
       "fields": "Campos y etiquetas",
       "deals": "Negocios y moneda",
       "members": "Miembros del equipo",
-      "api": "Claves de API"
+      "api": "Claves de API",
+      "shopify": "Shopify"
     },
     "groups": {
       "account": "Cuenta",
@@ -1791,6 +1792,129 @@
       "newKeyDesc": "Nómbrala según la integración que la usará y concede solo los alcances que necesite.",
       "done": "Listo",
       "networkError": "No se pudo conectar con el servidor"
+    },
+    "shopify": {
+      "title": "Actualizaciones de pedidos de Shopify",
+      "description": "Envía a los clientes una plantilla de WhatsApp cuando su pedido de Shopify se realiza, se envía, sale a reparto, se entrega o se cancela.",
+      "loadFailed": "No se pudo cargar la configuración de Shopify",
+      "networkError": "No se pudo conectar con el servidor",
+      "saveFailed": "No se pudo guardar",
+      "saved": "Configuración de Shopify guardada",
+      "save": "Guardar",
+      "saving": "Guardando…",
+      "cancel": "Cancelar",
+      "connectTitle": "Ninguna tienda conectada",
+      "connectButton": "Conectar tienda",
+      "statusConnected": "Conectada",
+      "statusPaused": "En pausa",
+      "statusNotConnected": "No conectada",
+      "lastEvent": "Último evento recibido el {date}",
+      "noEventsYet": "Aún no se ha recibido ningún evento",
+      "adminOnly": "Pide a un administrador que conecte o cambie la tienda de Shopify.",
+      "webhookUrlLabel": "URL del webhook",
+      "webhookUrlHint": "En el panel de Shopify, abre Configuración → Notificaciones → Webhooks y crea un webhook (formato JSON) hacia esta URL para cada uno de estos eventos:",
+      "topics": {
+        "orders_create": "Creación de pedido",
+        "orders_cancelled": "Cancelación de pedido",
+        "fulfillments_create": "Creación de preparación",
+        "fulfillments_update": "Actualización de preparación"
+      },
+      "copy": "Copiar",
+      "copySuccess": "URL del webhook copiada",
+      "copyFailed": "No se pudo copiar — selecciona y copia manualmente",
+      "secretLabel": "Secreto de firma del webhook",
+      "secretPlaceholder": "Pega el secreto de Shopify",
+      "secretSavedPlaceholder": "Guardado. Escribe uno nuevo para reemplazarlo",
+      "secretHint": "Se muestra en la página de Webhooks de Shopify. Se guarda cifrado y no se vuelve a mostrar.",
+      "secretRequired": "Pega el secreto de firma del webhook de Shopify",
+      "countryCodeLabel": "Código de país predeterminado",
+      "countryCodeHint": "Se añade a los números escritos sin código de país. Déjalo vacío para omitir esos números.",
+      "pause": "Pausar",
+      "resume": "Reanudar",
+      "disconnect": "Desconectar",
+      "disconnectConfirm": "Confirmar desconexión",
+      "disconnected": "Shopify desconectado",
+      "eventsTitle": "Actualizaciones de pedido",
+      "eventsDesc": "Activa las actualizaciones que quieras y elige una plantilla aprobada para cada una.",
+      "events": {
+        "order_created": {
+          "label": "Pedido creado",
+          "desc": "Se envía una vez cuando se realiza un pedido nuevo."
+        },
+        "tracking_added": {
+          "label": "Seguimiento añadido",
+          "desc": "Se envía una vez cuando un envío recibe su primer número de seguimiento."
+        },
+        "tracking_updated": {
+          "label": "Seguimiento actualizado",
+          "desc": "Se envía cuando el número de seguimiento de un envío cambia por otro."
+        },
+        "out_for_delivery": {
+          "label": "En reparto",
+          "desc": "Se envía una vez cuando Shopify marca el envío como en reparto."
+        },
+        "delivered": {
+          "label": "Entregado",
+          "desc": "Se envía una vez cuando Shopify marca el envío como entregado."
+        },
+        "order_cancelled": {
+          "label": "Pedido cancelado",
+          "desc": "Se envía una vez cuando el pedido se cancela en Shopify."
+        }
+      },
+      "notConfigured": "Ninguna plantilla elegida",
+      "usingTemplate": "Plantilla: {name}",
+      "configure": "Configurar",
+      "edit": "Editar",
+      "enableNeedsTemplate": "Elige una plantilla antes de activar esta actualización",
+      "mappingIncomplete": "Todos los marcadores necesitan un valor",
+      "eventSaved": "Actualización guardada",
+      "templateLabel": "Plantilla",
+      "templatePlaceholder": "Elige una plantilla aprobada",
+      "noApprovedTemplates": "Aún no hay plantillas aprobadas. Crea una en Configuración → Plantillas y espera la aprobación de Meta.",
+      "slotHeader": "Encabezado {val}",
+      "slotBody": "Cuerpo {val}",
+      "slotButton": "Enlace del botón “{name}” {val}",
+      "sourcePlaceholder": "Elige un valor",
+      "sourceStatic": "Texto fijo",
+      "staticPlaceholder": "Texto a insertar",
+      "fallbackPlaceholder": "Alternativa si está vacío (opcional)",
+      "fields": {
+        "customer_first_name": "Nombre del cliente",
+        "customer_name": "Nombre completo del cliente",
+        "order_number": "Número de pedido",
+        "order_total": "Total del pedido",
+        "currency": "Moneda",
+        "item_summary": "Resumen de artículos",
+        "item_count": "Cantidad de artículos",
+        "order_status_url": "Enlace de estado del pedido",
+        "order_status_url_path": "Enlace de estado del pedido (sufijo del botón)",
+        "tracking_number": "Número de seguimiento",
+        "tracking_company": "Transportista",
+        "tracking_url": "Enlace de seguimiento",
+        "cancel_reason": "Motivo de cancelación"
+      },
+      "preview": "Vista previa con valores de ejemplo",
+      "enableLabel": "Enviar esta actualización",
+      "activityTitle": "Actividad",
+      "activityDesc": "Las actualizaciones de pedido más recientes y qué pasó con cada una.",
+      "noActivity": "Nada todavía. Las actualizaciones aparecen aquí cuando Shopify envía un evento.",
+      "refresh": "Actualizar",
+      "status": {
+        "sent": "Enviada",
+        "skipped": "Omitida",
+        "failed": "Fallida",
+        "pending": "Enviando",
+        "unknown": "Sin confirmar"
+      },
+      "reasons": {
+        "no_phone": "El pedido no tiene un número de teléfono utilizable",
+        "template_not_found": "La plantilla ya no existe en este espacio de trabajo",
+        "template_not_approved": "La plantilla no está aprobada por Meta",
+        "template_malformed": "La plantilla necesita sincronizarse con Meta",
+        "mapping_invalid": "La asignación de variables no es válida",
+        "missing_variable": "No hay valor para {slot} en este pedido"
+      }
     },
     "deals": {
       "title": "Negocios y moneda",

@@ -9,6 +9,24 @@ Versions follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Pre-1.0, `MINOR` bumps cover new modules; `PATCH` bumps cover bug fixes
 and polish.
 
+## [Unreleased]
+
+Adds **Shopify order updates**: customers get a WhatsApp template when
+their order is created or cancelled, when tracking is added or changed,
+and when the shipment is out for delivery or delivered.
+
+> **Migration required:** apply `supabase/migrations/043_shopify_integration.sql`
+> (five new `shopify_*` tables and the `shopify_apply_fulfillment`
+> function; no existing table changes).
+
+### Added
+
+- **Settings → Shopify.** Connect a store by pasting its webhook
+  signing secret and adding four webhooks in Shopify admin, then choose
+  an approved template and map its placeholders for each of the six
+  updates. An activity list shows what was sent, skipped or failed and
+  why. Setup and limits are in `docs/shopify.md`.
+
 ## [0.8.1] — 2026-07-10
 
 Fixes inbound chats fragmenting into multiple threads for the same

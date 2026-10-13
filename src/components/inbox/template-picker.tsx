@@ -21,7 +21,7 @@ import {
   LayoutTemplate,
   Loader2,
 } from "lucide-react";
-import { extractVariableIndices } from "@/lib/whatsapp/template-validators";
+import { collectVariableSlots } from "@/lib/whatsapp/template-variable-slots";
 import { useTranslations } from "next-intl";
 
 export interface TemplateSendValues {
@@ -42,36 +42,6 @@ function renderBodyPreview(body: string, params: string[]): string {
     const value = params[idx];
     return value && value.trim().length > 0 ? value : `{{${raw}}}`;
   });
-}
-
-interface UrlButtonSlot {
-  index: number;
-  text: string;
-  url: string;
-}
-
-/**
- * Templates may need values for: body variables, a text-header
- * variable, and per-URL-button suffixes. Collect them all so the
- * send-message path doesn't 400 on missing parameters.
- */
-function collectVariableSlots(template: MessageTemplate): {
-  bodyVars: number[];
-  headerVarCount: number;
-  urlButtonSlots: UrlButtonSlot[];
-} {
-  const bodyVars = extractVariableIndices(template.body_text);
-  const headerVarCount =
-    template.header_type === "text" && template.header_content
-      ? extractVariableIndices(template.header_content).length
-      : 0;
-  const urlButtonSlots: UrlButtonSlot[] = [];
-  (template.buttons ?? []).forEach((b, i) => {
-    if (b.type === "URL" && extractVariableIndices(b.url).length > 0) {
-      urlButtonSlots.push({ index: i, text: b.text, url: b.url });
-    }
-  });
-  return { bodyVars, headerVarCount, urlButtonSlots };
 }
 
 export function TemplatePicker({

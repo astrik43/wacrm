@@ -182,13 +182,19 @@ vi.mock('@/lib/whatsapp/encryption', () => ({
   isLegacyFormat: () => false,
 }));
 
+// Counts the best-effort "pause active flow run" writes.
+const flowPauseWrite = vi.fn();
+
 vi.mock('@/lib/flows/admin-client', () => ({
   // Only used for the best-effort "pause active flow run" write.
   supabaseAdmin: () => ({
     from: () => ({
-      update: () => ({
-        eq: () => ({ eq: () => ({ eq: async () => ({ error: null }) }) }),
-      }),
+      update: (patch: unknown) => {
+        flowPauseWrite(patch);
+        return {
+          eq: () => ({ eq: () => ({ eq: async () => ({ error: null }) }) }),
+        };
+      },
     }),
   }),
 }));
@@ -359,6 +365,42 @@ describe('sendMessageToConversation — template persistence (#483)', () => {
 // ============================================================
 
 const BSUID = 'US.13491208655302741918';
+
+describe('sendMessageToConversation — sender options', () => {
+  const params: SendMessageParams = {
+    conversationId: 'cv-1',
+    messageType: 'template',
+    templateName: 'order_update',
+    templateParams: ['A123', 'Friday'],
+  };
+
+  it('defaults to an agent send that pauses the active flow', async () => {
+    flowPauseWrite.mockClear();
+    const captured: CapturedWrites = {};
+    await sendMessageToConversation(
+      sendPathDb([TEMPLATE_ROW], captured),
+      'acct-1',
+      params
+    );
+
+    expect(captured.message?.sender_type).toBe('agent');
+    expect(flowPauseWrite).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends as a bot without pausing the flow when asked to', async () => {
+    flowPauseWrite.mockClear();
+    const captured: CapturedWrites = {};
+    await sendMessageToConversation(
+      sendPathDb([TEMPLATE_ROW], captured),
+      'acct-1',
+      params,
+      { senderType: 'bot', pauseActiveFlows: false }
+    );
+
+    expect(captured.message?.sender_type).toBe('bot');
+    expect(flowPauseWrite).not.toHaveBeenCalled();
+  });
+});
 
 describe('sendMessageToConversation — BSUID recipients (#519)', () => {
   it('sends to the BSUID when the contact has no phone number', async () => {
