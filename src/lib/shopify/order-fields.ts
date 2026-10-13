@@ -23,6 +23,7 @@ export const SHOPIFY_FIELD_KEYS = [
   'tracking_company',
   'tracking_url',
   'cancel_reason',
+  'product_image_url',
 ] as const;
 
 export type ShopifyFieldKey = (typeof SHOPIFY_FIELD_KEYS)[number];
@@ -40,6 +41,11 @@ interface FieldMeta {
   sample: string;
   /** Events the field can be filled for; omitted = all six. */
   events?: readonly ShopifyEvent[];
+  /**
+   * 'image' fields hold a picture link: they fill a template's image
+   * header and are never offered for a text placeholder.
+   */
+  kind?: 'image';
 }
 
 export const SHOPIFY_FIELDS: Record<ShopifyFieldKey, FieldMeta> = {
@@ -61,7 +67,15 @@ export const SHOPIFY_FIELDS: Record<ShopifyFieldKey, FieldMeta> = {
     events: FULFILLMENT_EVENTS,
   },
   cancel_reason: { sample: 'customer', events: ['order_cancelled'] },
+  product_image_url: {
+    sample: 'https://cdn.shopify.com/s/files/sample-product.jpg',
+    kind: 'image',
+  },
 };
+
+export function isImageField(field: ShopifyFieldKey): boolean {
+  return SHOPIFY_FIELDS[field].kind === 'image';
+}
 
 export function fieldAppliesToEvent(
   field: ShopifyFieldKey,
@@ -71,8 +85,11 @@ export function fieldAppliesToEvent(
   return !events || events.includes(event);
 }
 
+/** Fields that can fill a TEXT placeholder for this event. */
 export function fieldsForEvent(event: ShopifyEvent): ShopifyFieldKey[] {
-  return SHOPIFY_FIELD_KEYS.filter((f) => fieldAppliesToEvent(f, event));
+  return SHOPIFY_FIELD_KEYS.filter(
+    (f) => fieldAppliesToEvent(f, event) && !isImageField(f)
+  );
 }
 
 const MAX_VALUE_LEN = 500;
@@ -215,4 +232,31 @@ export function extractFulfillmentFields(fulfillment: unknown): ShopifyFields {
   // per-shipment suffix.
   put(fields, 'order_number', str(f.name).replace(/\.\d+$/, ''));
   return fields;
+}
+
+/** Shopify ids of the first line item — what the product-image lookup needs. */
+export interface LineItemRef {
+  variantId: string | null;
+  productId: string | null;
+}
+
+function numericId(value: unknown): string | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  if (typeof value === 'string' && /^\d+$/.test(value.trim())) return value.trim();
+  return null;
+}
+
+/**
+ * The first line item of an order or fulfillment payload. `null` when
+ * there is none, or it is a custom item with no product behind it.
+ */
+export function firstLineItemRef(payload: unknown): LineItemRef | null {
+  const items = obj(payload)?.line_items;
+  const first = Array.isArray(items) ? obj(items[0]) : null;
+  if (!first) return null;
+  const ref = {
+    variantId: numericId(first.variant_id),
+    productId: numericId(first.product_id),
+  };
+  return ref.variantId || ref.productId ? ref : null;
 }

@@ -26,6 +26,23 @@ and when the shipment is out for delivery or delivered.
   an approved template and map its placeholders for each of the six
   updates. An activity list shows what was sent, skipped or failed and
   why. Setup and limits are in `docs/shopify.md`.
+- **Product image in order updates.** A template with an image header
+  can show the first product in the order. Paste the credentials of a
+  Shopify Dev Dashboard app (`read_products`) under Settings → Shopify
+  → Product images, then set the update's header image to the product
+  image. Falls back to the template's own image when a product has
+  none.
+
+- **Shopify webhook log.** Settings → Shopify now has a table of every
+  delivery Shopify made in the last 30 days, with its topic, order,
+  status and what it led to, plus the payload on demand. Rejected
+  deliveries (bad signature) are listed too. Admins only.
+
+> **Migration required:** apply `supabase/migrations/044_shopify_api_credentials.sql`
+> (four nullable columns on `shopify_configs`) and
+> `supabase/migrations/045_shopify_webhook_events.sql` (the webhook log
+> table). Apply them **before** deploying this version: the Shopify
+> webhook reads the new columns.
 
 ## [0.8.1] — 2026-07-10
 

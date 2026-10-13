@@ -6,6 +6,8 @@ import {
   extractOrderFields,
   fieldAppliesToEvent,
   fieldsForEvent,
+  firstLineItemRef,
+  isImageField,
   sanitizeTemplateValue,
 } from './order-fields';
 
@@ -97,5 +99,37 @@ describe('field applicability', () => {
     expect(fieldAppliesToEvent('cancel_reason', 'delivered')).toBe(false);
     expect(fieldsForEvent('order_created')).not.toContain('tracking_url');
     expect(fieldsForEvent('order_created')).toContain('order_number');
+  });
+
+  it('keeps the picture link out of the text-placeholder choices', () => {
+    expect(isImageField('product_image_url')).toBe(true);
+    expect(isImageField('order_number')).toBe(false);
+    expect(fieldsForEvent('order_created')).not.toContain('product_image_url');
+    expect(fieldsForEvent('delivered')).not.toContain('product_image_url');
+  });
+});
+
+describe('firstLineItemRef', () => {
+  it('reads the first item\'s ids as strings', () => {
+    expect(
+      firstLineItemRef({
+        line_items: [
+          { variant_id: 808950810, product_id: 632910392 },
+          { variant_id: 1, product_id: 2 },
+        ],
+      })
+    ).toEqual({ variantId: '808950810', productId: '632910392' });
+  });
+
+  it('tolerates a missing variant and rejects items with no product', () => {
+    expect(
+      firstLineItemRef({ line_items: [{ variant_id: null, product_id: 7 }] })
+    ).toEqual({ variantId: null, productId: '7' });
+    expect(
+      firstLineItemRef({ line_items: [{ variant_id: null, product_id: null }] })
+    ).toBeNull();
+    expect(firstLineItemRef({ line_items: [] })).toBeNull();
+    expect(firstLineItemRef({})).toBeNull();
+    expect(firstLineItemRef(null)).toBeNull();
   });
 });

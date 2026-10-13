@@ -6,6 +6,8 @@ const h = vi.hoisted(() => ({
   getConfig: vi.fn(),
   process: vi.fn(),
   configUpdates: [] as Record<string, unknown>[],
+  record: vi.fn(),
+  finish: vi.fn(),
 }));
 
 vi.mock('next/server', () => ({
@@ -35,6 +37,12 @@ vi.mock('@/lib/shopify/config', () => ({
 
 vi.mock('@/lib/shopify/process', () => ({
   processShopifyWebhook: h.process,
+}));
+
+vi.mock('@/lib/shopify/webhook-log', () => ({
+  recordWebhookEvent: h.record,
+  finishWebhookEvent: h.finish,
+  orderRefOf: (payload: { name?: string } | null) => payload?.name ?? null,
 }));
 
 vi.mock('@/lib/whatsapp/encryption', () => ({
@@ -89,8 +97,14 @@ beforeEach(() => {
   h.configUpdates.length = 0;
   h.getConfig.mockReset();
   h.process.mockReset();
+  h.record.mockReset();
+  h.finish.mockReset();
   h.getConfig.mockResolvedValue({ config: CONFIG, error: false });
-  h.process.mockResolvedValue(undefined);
+  h.process.mockResolvedValue({
+    orderRef: '#1042',
+    outcomes: [{ event: 'order_created', status: 'sent' }],
+  });
+  h.record.mockResolvedValue('log-1');
 });
 
 describe('POST /api/shopify/webhook/[token]', () => {
@@ -108,12 +122,32 @@ describe('POST /api/shopify/webhook/[token]', () => {
       (await post(BODY, { 'x-shopify-hmac-sha256': sign(BODY, 'wrong') })).status
     ).toBe(401);
     expect((await post(BODY, { 'x-shopify-hmac-sha256': '' })).status).toBe(401);
-    expect(h.afterCallbacks).toHaveLength(0);
+    await drainAfter();
+    expect(h.process).not.toHaveBeenCalled();
+  });
+
+  it('logs a rejected delivery without keeping its unverified payload', async () => {
+    await post(BODY, { 'x-shopify-hmac-sha256': sign(BODY, 'wrong') });
+    await drainAfter();
+    expect(h.record).toHaveBeenCalledTimes(1);
+    const logged = h.record.mock.calls[0][1];
+    expect(logged).toMatchObject({
+      account_id: 'acct-1',
+      topic: 'orders/create',
+      status: 'rejected',
+      detail: 'invalid_signature',
+    });
+    expect(logged).not.toHaveProperty('payload');
   });
 
   it('400s a signed body that is not JSON', async () => {
     expect((await post('not json')).status).toBe(400);
-    expect(h.afterCallbacks).toHaveLength(0);
+    await drainAfter();
+    expect(h.process).not.toHaveBeenCalled();
+    expect(h.record.mock.calls[0][1]).toMatchObject({
+      status: 'rejected',
+      detail: 'invalid_json',
+    });
   });
 
   it('acknowledges first, then processes the delivery', async () => {
@@ -135,6 +169,42 @@ describe('POST /api/shopify/webhook/[token]', () => {
     expect(h.configUpdates[0].last_webhook_at).toEqual(expect.any(String));
   });
 
+  it('logs an accepted delivery with its payload and what it led to', async () => {
+    await post(BODY);
+    await drainAfter();
+
+    expect(h.record.mock.calls[0][1]).toEqual({
+      account_id: 'acct-1',
+      topic: 'orders/create',
+      shopify_webhook_id: 'wh-1',
+      shop_domain: 'acme.myshopify.com',
+      status: 'received',
+      order_ref: '#1042',
+      payload: { id: 1001, name: '#1042' },
+    });
+    expect(h.finish).toHaveBeenCalledWith(expect.anything(), 'log-1', {
+      status: 'processed',
+      detail: null,
+      order_ref: '#1042',
+      outcome: [{ event: 'order_created', status: 'sent' }],
+    });
+  });
+
+  it('logs why a delivery produced no customer update', async () => {
+    h.process.mockResolvedValue({
+      orderRef: '#9999',
+      note: 'order_already_cancelled',
+      outcomes: [],
+    });
+    await post(BODY);
+    await drainAfter();
+    expect(h.finish.mock.calls[0][2]).toMatchObject({
+      status: 'processed',
+      detail: 'order_already_cancelled',
+      outcome: [],
+    });
+  });
+
   it('acknowledges but does not process an unknown topic or a paused store', async () => {
     expect((await post(BODY, { 'x-shopify-topic': 'products/update' })).status).toBe(200);
     await drainAfter();
@@ -147,11 +217,23 @@ describe('POST /api/shopify/webhook/[token]', () => {
     await drainAfter();
 
     expect(h.process).not.toHaveBeenCalled();
+    expect(h.finish.mock.calls.map((c) => c[2])).toEqual([
+      { status: 'ignored', detail: 'unsupported_topic' },
+      { status: 'ignored', detail: 'connection_paused' },
+    ]);
   });
 
-  it('swallows a processing error after the acknowledgement', async () => {
+  it('swallows a processing error after the acknowledgement and logs it', async () => {
     h.process.mockRejectedValue(new Error('boom'));
     expect((await post(BODY)).status).toBe(200);
     await expect(drainAfter()).resolves.toBeUndefined();
+    expect(h.finish.mock.calls[0][2]).toEqual({ status: 'error', detail: 'boom' });
+  });
+
+  it('still processes when the log itself cannot be written', async () => {
+    h.record.mockResolvedValue(null);
+    await post(BODY);
+    await drainAfter();
+    expect(h.process).toHaveBeenCalledTimes(1);
   });
 });

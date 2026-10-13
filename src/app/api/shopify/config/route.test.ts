@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   getCurrentAccount: vi.fn(),
   requireRole: vi.fn(),
+  requestAccessToken: vi.fn(),
 }));
 
 vi.mock('@/lib/auth/account', () => ({
@@ -17,12 +18,30 @@ vi.mock('@/lib/whatsapp/encryption', () => ({
   encrypt: (v: string) => `enc:${v}`,
 }));
 
+vi.mock('@/lib/shopify/admin-api', () => {
+  class ShopifyApiError extends Error {
+    code: string;
+    constructor(code: string, message: string) {
+      super(message);
+      this.code = code;
+    }
+  }
+  return {
+    ShopifyApiError,
+    requestAccessToken: mocks.requestAccessToken,
+    canReadProducts: (scopes: string[]) => scopes.includes('read_products'),
+    isMyshopifyDomain: (d: unknown) =>
+      typeof d === 'string' && /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(d),
+  };
+});
+
 vi.mock('@/lib/rate-limit', () => ({
   checkRateLimit: () => ({ success: true }),
   rateLimitResponse: vi.fn(),
   RATE_LIMITS: { adminAction: {} },
 }));
 
+import { ShopifyApiError } from '@/lib/shopify/admin-api';
 import { DELETE, GET, PUT } from './route';
 
 const ROW = {
@@ -100,6 +119,12 @@ beforeEach(() => {
   mocks.getCurrentAccount.mockReset();
   mocks.requireRole.mockReset();
   mocks.requireRole.mockImplementation(async () => ctx(state, 'admin'));
+  mocks.requestAccessToken.mockReset();
+  mocks.requestAccessToken.mockResolvedValue({
+    token: 'shpat_token',
+    expiresAt: '2026-10-14T00:00:00.000Z',
+    scopes: ['read_products'],
+  });
 });
 
 describe('/api/shopify/config', () => {
@@ -170,6 +195,106 @@ describe('/api/shopify/config', () => {
     expect(state.updates).toEqual([
       { default_country_code: null, is_active: false },
     ]);
+  });
+
+  it('PUT checks app credentials with Shopify and stores them encrypted', async () => {
+    state.existing = { id: 'cfg-1', shop_domain: 'acme.myshopify.com' };
+    const response = await put({
+      api_client_id: ' client-id ',
+      api_client_secret: ' client-secret ',
+    });
+
+    expect(response.status).toBe(200);
+    expect(mocks.requestAccessToken).toHaveBeenCalledWith(
+      'acme.myshopify.com',
+      'client-id',
+      'client-secret'
+    );
+    expect(state.updates).toEqual([
+      {
+        api_client_id: 'client-id',
+        api_client_secret: 'enc:client-secret',
+        api_access_token: 'enc:shpat_token',
+        api_token_expires_at: '2026-10-14T00:00:00.000Z',
+        shop_domain: 'acme.myshopify.com',
+      },
+    ]);
+    const text = JSON.stringify(await response.json());
+    expect(text).not.toContain('client-secret');
+    expect(text).not.toContain('shpat_token');
+  });
+
+  it('PUT takes a typed store domain when no webhook has arrived yet', async () => {
+    state.existing = { id: 'cfg-1', shop_domain: null };
+
+    const missing = await put({ api_client_id: 'a', api_client_secret: 'b' });
+    expect(missing.status).toBe(400);
+    expect(mocks.requestAccessToken).not.toHaveBeenCalled();
+
+    const typed = await put({
+      api_client_id: 'a',
+      api_client_secret: 'b',
+      shop_domain: 'https://Acme.myshopify.com/admin',
+    });
+    expect(typed.status).toBe(200);
+    expect(mocks.requestAccessToken).toHaveBeenCalledWith(
+      'acme.myshopify.com',
+      'a',
+      'b'
+    );
+  });
+
+  it('PUT saves nothing when Shopify refuses the credentials or the scope is missing', async () => {
+    state.existing = { id: 'cfg-1', shop_domain: 'acme.myshopify.com' };
+
+    mocks.requestAccessToken.mockRejectedValueOnce(
+      new ShopifyApiError('shop_not_permitted', 'Not in the same organization')
+    );
+    const refused = await put({ api_client_id: 'a', api_client_secret: 'b' });
+    expect(refused.status).toBe(400);
+    expect(await refused.json()).toMatchObject({ code: 'shop_not_permitted' });
+
+    mocks.requestAccessToken.mockResolvedValueOnce({
+      token: 't',
+      expiresAt: 'x',
+      scopes: ['read_orders'],
+    });
+    const noScope = await put({ api_client_id: 'a', api_client_secret: 'b' });
+    expect(noScope.status).toBe(400);
+
+    const half = await put({ api_client_id: 'a' });
+    expect(half.status).toBe(400);
+
+    expect(state.updates).toEqual([]);
+  });
+
+  it('PUT clears the credentials and cached token when asked', async () => {
+    state.existing = { id: 'cfg-1', shop_domain: 'acme.myshopify.com' };
+    const response = await put({ api_client_id: null });
+    expect(response.status).toBe(200);
+    expect(state.updates).toEqual([
+      {
+        api_client_id: null,
+        api_client_secret: null,
+        api_access_token: null,
+        api_token_expires_at: null,
+      },
+    ]);
+  });
+
+  it('GET reports whether credentials are set, and the client id to admins only', async () => {
+    state.existing = { ...ROW, api_client_id: 'client-id' };
+
+    mocks.getCurrentAccount.mockResolvedValue(ctx(state, 'agent'));
+    const agent = await (await GET()).json();
+    expect(agent.config).toMatchObject({
+      has_api_credentials: true,
+      api_client_id: null,
+    });
+
+    mocks.getCurrentAccount.mockResolvedValue(ctx(state, 'admin'));
+    const admin = await (await GET()).json();
+    expect(admin.config.api_client_id).toBe('client-id');
   });
 
   it('DELETE requires admin and removes the connection', async () => {

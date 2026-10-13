@@ -31,6 +31,7 @@ import { RequireRole } from '@/components/auth/require-role';
 import { useAuth } from '@/hooks/use-auth';
 import { SHOPIFY_TOPICS, type ShopifyEvent } from '@/lib/shopify/events';
 import { SettingsPanelHead } from './settings-panel-head';
+import { ShopifyWebhookLog, shopifyReasonText } from './shopify-webhook-log';
 import {
   ShopifyEventDialog,
   type ShopifyEventSetting,
@@ -44,6 +45,9 @@ interface ShopifyConfig {
   last_webhook_at: string | null;
   /** Null for non-admins. */
   webhook_path: string | null;
+  has_api_credentials: boolean;
+  /** Null for non-admins. */
+  api_client_id: string | null;
 }
 
 interface ShopifyNotification {
@@ -59,14 +63,6 @@ interface ShopifyNotification {
 // A claim that never reached sent/skipped/failed means the process
 // died mid-send; after this long we stop calling it "sending".
 const PENDING_STALE_MS = 5 * 60 * 1000;
-
-const KNOWN_REASONS = [
-  'no_phone',
-  'template_not_found',
-  'template_not_approved',
-  'template_malformed',
-  'mapping_invalid',
-] as const;
 
 function fmtDateTime(iso: string): string {
   return new Date(iso).toLocaleString(undefined, {
@@ -98,6 +94,9 @@ export function ShopifySettings() {
   const [secret, setSecret] = useState('');
   const [countryCode, setCountryCode] = useState('');
   const [saving, setSaving] = useState(false);
+  const [apiClientId, setApiClientId] = useState('');
+  const [apiClientSecret, setApiClientSecret] = useState('');
+  const [shopDomain, setShopDomain] = useState('');
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const [editing, setEditing] = useState<ShopifyEventSetting | null>(null);
   const [toggling, setToggling] = useState<ShopifyEvent | null>(null);
@@ -124,6 +123,7 @@ export function ShopifySettings() {
       };
       setConfig(configData.config);
       setCountryCode(configData.config?.default_country_code ?? '');
+      setApiClientId(configData.config?.api_client_id ?? '');
       setEvents(eventsData.events);
       setActivity(activityData.notifications);
     } catch (err) {
@@ -155,7 +155,9 @@ export function ShopifySettings() {
       }
       setConfig(payload.config as ShopifyConfig);
       setCountryCode((payload.config as ShopifyConfig).default_country_code ?? '');
+      setApiClientId((payload.config as ShopifyConfig).api_client_id ?? '');
       setSecret('');
+      setApiClientSecret('');
       return true;
     } catch (err) {
       console.error('[ShopifySettings] save error:', err);
@@ -177,6 +179,24 @@ export function ShopifySettings() {
       default_country_code: countryCode.trim() || null,
     });
     if (ok) toast.success(t('saved'));
+  }
+
+  async function handleSaveApi() {
+    if (!apiClientId.trim() || !apiClientSecret.trim()) {
+      toast.error(t('apiRequired'));
+      return;
+    }
+    const ok = await putConfig({
+      api_client_id: apiClientId.trim(),
+      api_client_secret: apiClientSecret.trim(),
+      ...(shopDomain.trim() ? { shop_domain: shopDomain.trim() } : {}),
+    });
+    if (ok) toast.success(t('apiSaved'));
+  }
+
+  async function handleRemoveApi() {
+    const ok = await putConfig({ api_client_id: null });
+    if (ok) toast.success(t('apiRemoved'));
   }
 
   async function handleDisconnect() {
@@ -238,19 +258,6 @@ export function ShopifySettings() {
     } catch {
       toast.error(t('copyFailed'));
     }
-  }
-
-  function reasonText(reason: string | null): string {
-    if (!reason) return '';
-    if ((KNOWN_REASONS as readonly string[]).includes(reason)) {
-      return t(`reasons.${reason}`);
-    }
-    if (reason.startsWith('missing_variable:')) {
-      return t('reasons.missing_variable', {
-        slot: reason.slice('missing_variable:'.length),
-      });
-    }
-    return reason;
   }
 
   if (loading) {
@@ -415,6 +422,102 @@ export function ShopifySettings() {
         </CardContent>
       </Card>
 
+      {/* ---- Product images -------------------------------------- */}
+      {config && canEditSettings && (
+        <Card>
+          <CardContent className="space-y-4 p-4">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-foreground text-sm font-semibold">
+                  {t('productImagesTitle')}
+                </h3>
+                <Badge className="border-border bg-muted text-muted-foreground text-[10px] tracking-wide uppercase">
+                  {config.has_api_credentials
+                    ? t('apiConnected')
+                    : t('apiNotConnected')}
+                </Badge>
+              </div>
+              <p className="text-muted-foreground mt-1 text-sm">
+                {t('productImagesDesc')}
+              </p>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label
+                  htmlFor="shopify-api-client-id"
+                  className="text-muted-foreground"
+                >
+                  {t('clientIdLabel')}
+                </Label>
+                <Input
+                  id="shopify-api-client-id"
+                  autoComplete="off"
+                  value={apiClientId}
+                  onChange={(e) => setApiClientId(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label
+                  htmlFor="shopify-api-client-secret"
+                  className="text-muted-foreground"
+                >
+                  {t('clientSecretLabel')}
+                </Label>
+                <Input
+                  id="shopify-api-client-secret"
+                  type="password"
+                  autoComplete="off"
+                  value={apiClientSecret}
+                  placeholder={
+                    config.has_api_credentials
+                      ? t('secretSavedPlaceholder')
+                      : undefined
+                  }
+                  onChange={(e) => setApiClientSecret(e.target.value)}
+                />
+              </div>
+              {!config.shop_domain && (
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label
+                    htmlFor="shopify-shop-domain"
+                    className="text-muted-foreground"
+                  >
+                    {t('shopDomainLabel')}
+                  </Label>
+                  <Input
+                    id="shopify-shop-domain"
+                    autoComplete="off"
+                    value={shopDomain}
+                    placeholder="your-store.myshopify.com"
+                    onChange={(e) => setShopDomain(e.target.value)}
+                  />
+                  <p className="text-muted-foreground text-xs">
+                    {t('shopDomainHint')}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={handleSaveApi} disabled={saving}>
+                {saving ? <Loader2 className="size-4 animate-spin" /> : null}
+                {t('apiSave')}
+              </Button>
+              {config.has_api_credentials && (
+                <Button
+                  variant="outline"
+                  disabled={saving}
+                  onClick={handleRemoveApi}
+                >
+                  {t('apiRemove')}
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* ---- Order updates --------------------------------------- */}
       <div>
         <h3 className="text-foreground text-sm font-semibold">{t('eventsTitle')}</h3>
@@ -512,7 +615,7 @@ export function ShopifySettings() {
                         </p>
                         {n.reason && (
                           <p className="text-muted-foreground mt-0.5 text-xs break-words">
-                            {reasonText(n.reason)}
+                            {shopifyReasonText(t, n.reason)}
                           </p>
                         )}
                       </div>
@@ -533,9 +636,13 @@ export function ShopifySettings() {
         </Card>
       </div>
 
+      {/* ---- Webhook log ----------------------------------------- */}
+      {config && canEditSettings && <ShopifyWebhookLog />}
+
       {editing && (
         <ShopifyEventDialog
           setting={editing}
+          hasApiCredentials={config?.has_api_credentials ?? false}
           onOpenChange={(open) => {
             if (!open) setEditing(null);
           }}

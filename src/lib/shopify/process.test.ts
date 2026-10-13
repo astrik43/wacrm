@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-const mocks = vi.hoisted(() => ({ notify: vi.fn() }));
+const mocks = vi.hoisted(() => ({ notify: vi.fn(), fetchImage: vi.fn() }));
 
 vi.mock('./notify', () => ({ notifyShopifyEvent: mocks.notify }));
+vi.mock('./admin-api', () => ({ fetchLineItemImage: mocks.fetchImage }));
 
 import type { ShopifyConfigRow } from './config';
 import { processShopifyWebhook } from './process';
@@ -17,6 +18,10 @@ const CONFIG: ShopifyConfigRow = {
   default_country_code: '91',
   is_active: true,
   last_webhook_at: null,
+  api_client_id: null,
+  api_client_secret: null,
+  api_access_token: null,
+  api_token_expires_at: null,
 };
 
 interface FakeState {
@@ -87,6 +92,7 @@ const NEW = {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.notify.mockResolvedValue({ status: 'sent', messageId: 'm' });
+  mocks.fetchImage.mockResolvedValue(null);
 });
 
 describe('processShopifyWebhook — orders', () => {
@@ -116,6 +122,38 @@ describe('processShopifyWebhook — orders', () => {
         orderName: '#1042',
         webhookId: 'wh-1',
       })
+    );
+  });
+
+  it('stores the first item\'s picture with the order and passes it on', async () => {
+    mocks.fetchImage.mockResolvedValue('https://cdn.shopify.com/p.jpg');
+    const state = freshState();
+    await processShopifyWebhook(
+      fakeDb(state),
+      CONFIG,
+      'orders/create',
+      { ...ORDER, line_items: [{ variant_id: 11, product_id: 22, title: 'Cap' }] },
+      null
+    );
+
+    expect(mocks.fetchImage).toHaveBeenCalledWith(expect.anything(), CONFIG, {
+      variantId: '11',
+      productId: '22',
+    });
+    expect(
+      (state.orderUpserts[0].row.fields as Record<string, string>).product_image_url
+    ).toBe('https://cdn.shopify.com/p.jpg');
+    expect(mocks.notify.mock.calls[0][2].fields.product_image_url).toBe(
+      'https://cdn.shopify.com/p.jpg'
+    );
+  });
+
+  it('still announces the order when no picture is found', async () => {
+    const state = freshState();
+    await processShopifyWebhook(fakeDb(state), CONFIG, 'orders/create', ORDER, null);
+    expect(mocks.notify).toHaveBeenCalledTimes(1);
+    expect(mocks.notify.mock.calls[0][2].fields).not.toHaveProperty(
+      'product_image_url'
     );
   });
 
@@ -153,6 +191,68 @@ describe('processShopifyWebhook — orders', () => {
     await processShopifyWebhook(fakeDb(state), CONFIG, 'orders/create', 'x', null);
     expect(state.orderUpserts).toEqual([]);
     expect(mocks.notify).not.toHaveBeenCalled();
+  });
+});
+
+describe('processShopifyWebhook — result for the webhook log', () => {
+  it('reports each update and what happened to it', async () => {
+    mocks.notify.mockResolvedValue({ status: 'skipped', reason: 'no_phone' });
+    const result = await processShopifyWebhook(
+      fakeDb(freshState()),
+      CONFIG,
+      'orders/create',
+      ORDER,
+      null
+    );
+    expect(result).toEqual({
+      orderRef: '#1042',
+      outcomes: [{ event: 'order_created', status: 'skipped', reason: 'no_phone' }],
+    });
+  });
+
+  it('explains deliveries that produce no update', async () => {
+    expect(
+      await processShopifyWebhook(
+        fakeDb(freshState()),
+        CONFIG,
+        'orders/create',
+        { ...ORDER, cancelled_at: '2026-10-12T11:00:00+05:30' },
+        null
+      )
+    ).toEqual({ orderRef: '#1042', note: 'order_already_cancelled', outcomes: [] });
+
+    expect(
+      await processShopifyWebhook(fakeDb(freshState()), CONFIG, 'orders/create', {}, null)
+    ).toEqual({ orderRef: null, note: 'missing_id', outcomes: [] });
+
+    expect(
+      await processShopifyWebhook(fakeDb(freshState()), CONFIG, 'orders/create', 'x', null)
+    ).toEqual({ orderRef: null, note: 'invalid_payload', outcomes: [] });
+
+    const fulfillment = { id: 1, order_id: 2, name: '#1042.1', tracking_number: 'EX1' };
+    expect(
+      await processShopifyWebhook(
+        fakeDb(freshState({ rpcResult: { ...NEW, applied: false, was_new: false } })),
+        CONFIG,
+        'fulfillments/update',
+        fulfillment,
+        null
+      )
+    ).toEqual({ orderRef: '#1042.1', note: 'stale_update', outcomes: [] });
+
+    expect(
+      await processShopifyWebhook(
+        fakeDb(
+          freshState({
+            rpcResult: { ...NEW, was_new: false, prev_tracking_number: 'EX1' },
+          })
+        ),
+        CONFIG,
+        'fulfillments/update',
+        fulfillment,
+        null
+      )
+    ).toEqual({ orderRef: '#1042.1', note: 'no_change', outcomes: [] });
   });
 });
 
@@ -272,5 +372,45 @@ describe('processShopifyWebhook — fulfillments', () => {
       orderName: '#1042',
       customerName: 'Priya Nair',
     });
+  });
+
+  it('reuses the stored picture, and looks one up only for an unseen order', async () => {
+    const seen = freshState({
+      storedOrder: {
+        ...STORED_ORDER,
+        fields: { ...STORED_ORDER.fields, product_image_url: 'https://cdn/stored.jpg' },
+      },
+      rpcResult: NEW,
+    });
+    await processShopifyWebhook(fakeDb(seen), CONFIG, 'fulfillments/create', FULFILLMENT, null);
+    expect(mocks.fetchImage).not.toHaveBeenCalled();
+    expect(mocks.notify.mock.calls[0][2].fields.product_image_url).toBe(
+      'https://cdn/stored.jpg'
+    );
+
+    mocks.notify.mockClear();
+    mocks.fetchImage.mockResolvedValue('https://cdn/looked-up.jpg');
+    vi.useFakeTimers();
+    try {
+      const unseen = freshState({ storedOrder: null, rpcResult: NEW });
+      const run = processShopifyWebhook(
+        fakeDb(unseen),
+        CONFIG,
+        'fulfillments/create',
+        { ...FULFILLMENT, line_items: [{ variant_id: 11, product_id: 22 }] },
+        null
+      );
+      await vi.runAllTimersAsync();
+      await run;
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(mocks.fetchImage).toHaveBeenCalledWith(expect.anything(), CONFIG, {
+      variantId: '11',
+      productId: '22',
+    });
+    expect(mocks.notify.mock.calls[0][2].fields.product_image_url).toBe(
+      'https://cdn/looked-up.jpg'
+    );
   });
 });

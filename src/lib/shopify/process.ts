@@ -17,6 +17,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { fetchLineItemImage } from './admin-api';
 import type { ShopifyConfigRow } from './config';
 import {
   deriveFulfillmentEvents,
@@ -28,12 +29,44 @@ import {
   extractFulfillmentFields,
   extractOrderCustomer,
   extractOrderFields,
+  firstLineItemRef,
   type ShopifyFields,
 } from './order-fields';
-import { notifyShopifyEvent } from './notify';
+import { notifyShopifyEvent, type NotifyOutcome } from './notify';
 import { pickOrderPhone } from './phone';
 
 type Json = Record<string, unknown>;
+
+/** What happened to one customer-facing update a delivery produced. */
+export interface ProcessOutcome {
+  event: ShopifyEvent;
+  status: NotifyOutcome['status'];
+  reason?: string;
+}
+
+/**
+ * What a delivery led to — recorded on the webhook log so "Shopify
+ * sent it but the customer got nothing" can be answered from the UI.
+ * `note` explains a delivery that produced no update at all.
+ */
+export interface ProcessResult {
+  orderRef: string | null;
+  note?:
+    | 'invalid_payload'
+    | 'missing_id'
+    | 'db_error'
+    | 'order_already_cancelled'
+    | 'stale_update'
+    | 'no_change'
+    | 'order_cancelled';
+  outcomes: ProcessOutcome[];
+}
+
+function toOutcome(event: ShopifyEvent, outcome: NotifyOutcome): ProcessOutcome {
+  return 'reason' in outcome
+    ? { event, status: outcome.status, reason: outcome.reason }
+    : { event, status: outcome.status };
+}
 
 const ORDER_WAIT_MS = 2000;
 
@@ -103,12 +136,17 @@ async function handleOrder(
   topic: 'orders/create' | 'orders/cancelled',
   order: Json,
   webhookId: string | null
-): Promise<void> {
+): Promise<ProcessResult> {
   const orderId = idOf(order.id);
-  if (!orderId) return;
+  if (!orderId) return { orderRef: null, note: 'missing_id', outcomes: [] };
 
   const accountId = config.account_id;
   const fields = extractOrderFields(order);
+  // Stored with the order, so every later shipment update for it can
+  // show the same picture without another lookup. Null (no
+  // credentials, no image, Shopify down) just means no picture.
+  const imageUrl = await fetchLineItemImage(db, config, firstLineItemRef(order));
+  if (imageUrl) fields.product_image_url = imageUrl;
   const { fullName } = extractOrderCustomer(order);
   const phone = orderPhone(order, config.default_country_code);
   const cancelledAt = timestamp(order.cancelled_at);
@@ -132,16 +170,22 @@ async function handleOrder(
   });
   if (error) {
     console.error('[shopify] order upsert failed:', error.message);
-    return;
+    return { orderRef: row.order_name ?? orderId, note: 'db_error', outcomes: [] };
   }
 
   const event: ShopifyEvent =
     topic === 'orders/create' ? 'order_created' : 'order_cancelled';
   // An order that is already cancelled when its create arrives gets
   // the cancellation message only.
-  if (event === 'order_created' && cancelledAt) return;
+  if (event === 'order_created' && cancelledAt) {
+    return {
+      orderRef: row.order_name ?? orderId,
+      note: 'order_already_cancelled',
+      outcomes: [],
+    };
+  }
 
-  await notifyShopifyEvent(db, accountId, {
+  const outcome = await notifyShopifyEvent(db, accountId, {
     event,
     dedupeKey: `${event}:${orderId}`,
     orderId,
@@ -152,6 +196,10 @@ async function handleOrder(
     fields,
     webhookId,
   });
+  return {
+    orderRef: row.order_name ?? orderId,
+    outcomes: [toOutcome(event, outcome)],
+  };
 }
 
 interface ApplyResult {
@@ -167,12 +215,13 @@ async function handleFulfillment(
   config: ShopifyConfigRow,
   fulfillment: Json,
   webhookId: string | null
-): Promise<void> {
+): Promise<ProcessResult> {
   const fulfillmentId = idOf(fulfillment.id);
-  if (!fulfillmentId) return;
+  if (!fulfillmentId) return { orderRef: null, note: 'missing_id', outcomes: [] };
 
   const accountId = config.account_id;
   const orderId = idOf(fulfillment.order_id);
+  const fallbackRef = text(fulfillment.name) ?? orderId;
   const fulfillmentFields = extractFulfillmentFields(fulfillment);
   const next = {
     trackingNumber: fulfillmentFields.tracking_number ?? null,
@@ -193,11 +242,13 @@ async function handleFulfillment(
   });
   if (error) {
     console.error('[shopify] fulfillment apply failed:', error.message);
-    return;
+    return { orderRef: fallbackRef, note: 'db_error', outcomes: [] };
   }
   const result = (Array.isArray(data) ? data[0] : data) as ApplyResult | null;
   // Stale delivery: a newer state is already stored and announced.
-  if (!result?.applied) return;
+  if (!result?.applied) {
+    return { orderRef: fallbackRef, note: 'stale_update', outcomes: [] };
+  }
 
   const prev: FulfillmentState | null = result.was_new
     ? null
@@ -207,7 +258,9 @@ async function handleFulfillment(
         shipmentStatus: result.prev_shipment_status,
       };
   const events = deriveFulfillmentEvents(prev, next);
-  if (events.length === 0) return;
+  if (events.length === 0) {
+    return { orderRef: fallbackRef, note: 'no_change', outcomes: [] };
+  }
 
   let order = orderId ? await loadOrder(db, accountId, orderId) : null;
   if (!order && orderId) {
@@ -215,7 +268,24 @@ async function handleFulfillment(
     await new Promise((resolve) => setTimeout(resolve, ORDER_WAIT_MS));
     order = await loadOrder(db, accountId, orderId);
   }
-  if (order?.cancelled_at) return;
+  if (order?.cancelled_at) {
+    return {
+      orderRef: order.order_name ?? fallbackRef,
+      note: 'order_cancelled',
+      outcomes: [],
+    };
+  }
+
+  // An order placed before the store was connected never had its
+  // picture looked up; the shipment lists the same items.
+  if (!order) {
+    const imageUrl = await fetchLineItemImage(
+      db,
+      config,
+      firstLineItemRef(fulfillment)
+    );
+    if (imageUrl) fulfillmentFields.product_image_url = imageUrl;
+  }
 
   const destination = obj(fulfillment.destination);
   const phone =
@@ -232,12 +302,13 @@ async function handleFulfillment(
   const orderName = order?.order_name ?? fields.order_number ?? null;
   const customerName = order?.customer_name ?? fields.customer_name ?? null;
 
+  const outcomes: ProcessOutcome[] = [];
   for (const event of events) {
     const dedupeKey =
       event === 'tracking_updated'
         ? `${event}:${fulfillmentId}:${next.trackingNumber ?? next.trackingUrl}`
         : `${event}:${fulfillmentId}`;
-    await notifyShopifyEvent(db, accountId, {
+    const outcome = await notifyShopifyEvent(db, accountId, {
       event,
       dedupeKey,
       orderId,
@@ -248,7 +319,9 @@ async function handleFulfillment(
       fields,
       webhookId,
     });
+    outcomes.push(toOutcome(event, outcome));
   }
+  return { orderRef: orderName ?? fallbackRef, outcomes };
 }
 
 export async function processShopifyWebhook(
@@ -257,13 +330,12 @@ export async function processShopifyWebhook(
   topic: ShopifyTopic,
   payload: unknown,
   webhookId: string | null
-): Promise<void> {
+): Promise<ProcessResult> {
   const body = obj(payload);
-  if (!body) return;
+  if (!body) return { orderRef: null, note: 'invalid_payload', outcomes: [] };
 
   if (topic === 'orders/create' || topic === 'orders/cancelled') {
-    await handleOrder(db, config, topic, body, webhookId);
-  } else {
-    await handleFulfillment(db, config, body, webhookId);
+    return handleOrder(db, config, topic, body, webhookId);
   }
+  return handleFulfillment(db, config, body, webhookId);
 }

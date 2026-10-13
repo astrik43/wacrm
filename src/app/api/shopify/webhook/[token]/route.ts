@@ -13,6 +13,10 @@
 // the ack are chosen for Shopify's retry behaviour:
 //   404  unknown token            401  bad signature
 //   400  body isn't JSON          503  our DB is unavailable (retry)
+//
+// Every delivery that reaches a connected store is written to the
+// webhook log (Settings → Shopify), including the ones rejected here,
+// so a merchant can see what Shopify sent and what became of it.
 // ============================================================
 
 import { NextResponse, after } from 'next/server';
@@ -22,6 +26,11 @@ import { getShopifyConfigByToken } from '@/lib/shopify/config';
 import { isShopifyTopic } from '@/lib/shopify/events';
 import { processShopifyWebhook } from '@/lib/shopify/process';
 import { verifyShopifyWebhookSignature } from '@/lib/shopify/signature';
+import {
+  finishWebhookEvent,
+  orderRefOf,
+  recordWebhookEvent,
+} from '@/lib/shopify/webhook-log';
 import { decrypt } from '@/lib/whatsapp/encryption';
 
 // Sending runs inside after(); give it the same budget as the
@@ -55,8 +64,26 @@ export async function POST(
     );
   }
   const signature = request.headers.get('x-shopify-hmac-sha256');
+  const topic = request.headers.get('x-shopify-topic');
+  const webhookId = request.headers.get('x-shopify-webhook-id');
+  const shopDomain = request.headers.get('x-shopify-shop-domain');
+  const logBase = {
+    account_id: config.account_id,
+    topic,
+    shopify_webhook_id: webhookId,
+    shop_domain: shopDomain,
+  };
+
   if (!verifyShopifyWebhookSignature(rawBody, signature, secret)) {
     console.warn('[shopify webhook] rejected: invalid signature');
+    // No payload: an unsigned body hasn't shown it came from Shopify.
+    after(async () => {
+      await recordWebhookEvent(db, {
+        ...logBase,
+        status: 'rejected',
+        detail: 'invalid_signature',
+      });
+    });
     return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
   }
 
@@ -64,14 +91,24 @@ export async function POST(
   try {
     payload = JSON.parse(rawBody.toString('utf8'));
   } catch {
+    after(async () => {
+      await recordWebhookEvent(db, {
+        ...logBase,
+        status: 'rejected',
+        detail: 'invalid_json',
+      });
+    });
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const topic = request.headers.get('x-shopify-topic');
-  const webhookId = request.headers.get('x-shopify-webhook-id');
-  const shopDomain = request.headers.get('x-shopify-shop-domain');
-
   after(async () => {
+    const logId = await recordWebhookEvent(db, {
+      ...logBase,
+      status: 'received',
+      order_ref: orderRefOf(payload),
+      payload,
+    });
+
     try {
       const { error: touchErr } = await db
         .from('shopify_configs')
@@ -88,11 +125,40 @@ export async function POST(
 
       // A topic we don't handle, or a paused connection, is still a
       // successful delivery as far as Shopify is concerned.
-      if (!config.is_active || !isShopifyTopic(topic)) return;
+      if (!config.is_active) {
+        await finishWebhookEvent(db, logId, {
+          status: 'ignored',
+          detail: 'connection_paused',
+        });
+        return;
+      }
+      if (!isShopifyTopic(topic)) {
+        await finishWebhookEvent(db, logId, {
+          status: 'ignored',
+          detail: 'unsupported_topic',
+        });
+        return;
+      }
 
-      await processShopifyWebhook(db, config, topic, payload, webhookId);
+      const result = await processShopifyWebhook(
+        db,
+        config,
+        topic,
+        payload,
+        webhookId
+      );
+      await finishWebhookEvent(db, logId, {
+        status: 'processed',
+        detail: result.note ?? null,
+        order_ref: result.orderRef,
+        outcome: result.outcomes,
+      });
     } catch (err) {
       console.error('[shopify webhook] processing failed:', err);
+      await finishWebhookEvent(db, logId, {
+        status: 'error',
+        detail: err instanceof Error ? err.message : 'unknown_error',
+      });
     }
   });
 

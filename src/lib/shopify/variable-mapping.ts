@@ -14,6 +14,7 @@ import { collectVariableSlots } from '@/lib/whatsapp/template-variable-slots';
 import type { ShopifyEvent } from './events';
 import {
   fieldAppliesToEvent,
+  isImageField,
   isShopifyFieldKey,
   sanitizeTemplateValue,
   type ShopifyFieldKey,
@@ -30,6 +31,12 @@ export interface ShopifyVariableMapping {
   headerText?: VariableSource;
   /** Keyed by the button's index in the template (a string after jsonb). */
   buttonParams?: Record<string, VariableSource>;
+  /**
+   * Picture for an IMAGE header. Unset = the image saved with the
+   * template. Only image fields (the ordered product's picture) are
+   * accepted.
+   */
+  headerImage?: VariableSource;
 }
 
 export const EMPTY_MAPPING: ShopifyVariableMapping = { body: [] };
@@ -63,6 +70,7 @@ export function parseVariableMapping(
     body?: unknown;
     headerText?: unknown;
     buttonParams?: unknown;
+    headerImage?: unknown;
   };
 
   const mapping: ShopifyVariableMapping = { body: [] };
@@ -93,7 +101,20 @@ export function parseVariableMapping(
     mapping.buttonParams = buttons;
   }
 
+  if (input.headerImage !== undefined && input.headerImage !== null) {
+    const parsed = parseSource(input.headerImage);
+    if (!parsed || parsed.type !== 'field' || !isImageField(parsed.value)) {
+      return null;
+    }
+    mapping.headerImage = { type: 'field', value: parsed.value };
+  }
+
   return mapping;
+}
+
+/** Does this template take a picture in its header? */
+export function templateHasImageHeader(template: MessageTemplate): boolean {
+  return template.header_type === 'image';
 }
 
 /** A template's placeholders, as stable slot ids ("body_1", "header", "button_0"). */
@@ -135,9 +156,16 @@ export function validateVariableMapping(
       problems.push(`unmapped:${slotId}`);
     } else if (source.type === 'static') {
       if (!sanitizeTemplateValue(source.value)) problems.push(`empty:${slotId}`);
-    } else if (!fieldAppliesToEvent(source.value, event)) {
+    } else if (
+      !fieldAppliesToEvent(source.value, event) ||
+      // A picture link is not text a customer should read.
+      isImageField(source.value)
+    ) {
       problems.push(`not_applicable:${slotId}`);
     }
+  }
+  if (mapping.headerImage && !templateHasImageHeader(template)) {
+    problems.push('not_applicable:header_image');
   }
   return problems;
 }
@@ -185,5 +213,20 @@ export function resolveSendParams(
   }
 
   if (Object.keys(buttonParams).length > 0) params.buttonParams = buttonParams;
+
+  if (templateHasImageHeader(template)) {
+    const mapped =
+      mapping.headerImage?.type === 'field'
+        ? (fields[mapping.headerImage.value] ?? '').trim()
+        : '';
+    if (mapped) {
+      params.headerMediaUrl = mapped;
+    } else if (!template.header_media_url) {
+      // No product picture for this order and nothing saved with the
+      // template: Meta would reject the send, so report it as a skip.
+      return { ok: false, missing: 'header_image' };
+    }
+  }
+
   return { ok: true, params };
 }
