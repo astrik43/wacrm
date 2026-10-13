@@ -40,6 +40,7 @@ export function isMyshopifyDomain(domain: string | null | undefined): domain is 
 export type ShopifyApiErrorCode =
   | 'invalid_shop'
   | 'shop_not_permitted'
+  | 'app_not_installed'
   | 'invalid_credentials'
   | 'unavailable';
 
@@ -97,6 +98,12 @@ export async function requestAccessToken(
       throw new ShopifyApiError(
         'shop_not_permitted',
         'This app and this store are not in the same Shopify organization'
+      );
+    }
+    if (text.includes('app_not_installed')) {
+      throw new ShopifyApiError(
+        'app_not_installed',
+        'The Shopify app is not installed on this store yet. Release a version of the app and install it on the store, then try again.'
       );
     }
     if (response.status >= 500) {

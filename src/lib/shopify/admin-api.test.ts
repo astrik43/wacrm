@@ -116,6 +116,15 @@ describe('requestAccessToken', () => {
       requestAccessToken('acme.myshopify.com', 'id', 'secret')
     ).rejects.toMatchObject({ code: 'shop_not_permitted' });
 
+    fetchMock.mockResolvedValueOnce(
+      new Response('<title>400 - Oauth error app_not_installed</title>', {
+        status: 400,
+      })
+    );
+    await expect(
+      requestAccessToken('acme.myshopify.com', 'id', 'secret')
+    ).rejects.toMatchObject({ code: 'app_not_installed' });
+
     fetchMock.mockResolvedValueOnce(new Response('invalid_client', { status: 401 }));
     await expect(
       requestAccessToken('acme.myshopify.com', 'id', 'bad')
