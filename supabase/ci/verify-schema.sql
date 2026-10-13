@@ -95,6 +95,21 @@ BEGIN
       'shopify_apply_fulfillment is missing — migration 043 did not apply';
   END IF;
 
+  -- Shopify Admin API credentials (044). The webhook's config lookup
+  -- selects these columns by name on an untyped client, so a missing
+  -- one turns every Shopify delivery into a 503.
+  IF (
+    SELECT COUNT(*) FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'shopify_configs'
+      AND column_name IN (
+        'api_client_id', 'api_client_secret',
+        'api_access_token', 'api_token_expires_at'
+      )
+  ) <> 4 THEN
+    RAISE EXCEPTION
+      'shopify_configs.api_* columns are missing — migration 044 did not apply';
+  END IF;
+
   RAISE NOTICE 'schema verification passed';
 END
 $$;

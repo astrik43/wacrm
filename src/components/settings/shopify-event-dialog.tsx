@@ -39,6 +39,7 @@ import {
   isShopifyFieldKey,
 } from '@/lib/shopify/order-fields';
 import {
+  templateHasImageHeader,
   templateSlotIds,
   validateVariableMapping,
   type ShopifyVariableMapping,
@@ -55,6 +56,8 @@ export interface ShopifyEventSetting {
 }
 
 const STATIC = '__static__';
+const IMAGE_TEMPLATE = '__template__';
+const IMAGE_PRODUCT = 'product_image_url';
 
 function templateKey(name: string, language?: string | null): string {
   return `${name}::${language ?? ''}`;
@@ -94,11 +97,14 @@ function sampleFor(source: VariableSource | undefined): string {
 
 export function ShopifyEventDialog({
   setting,
+  hasApiCredentials,
   onOpenChange,
   onSaved,
 }: {
   /** The update being edited; `null` closes the dialog. */
   setting: ShopifyEventSetting | null;
+  /** Whether the store can look product pictures up (Shopify app set). */
+  hasApiCredentials: boolean;
   onOpenChange: (open: boolean) => void;
   onSaved: () => void;
 }) {
@@ -342,6 +348,45 @@ export function ShopifyEventDialog({
                     </div>
                   );
                 })}
+              </div>
+            )}
+
+            {template && templateHasImageHeader(template) && (
+              <div className="space-y-1.5">
+                <Label className="text-popover-foreground text-xs">
+                  {t('headerImageLabel')}
+                </Label>
+                <Select
+                  value={mapping.headerImage ? IMAGE_PRODUCT : IMAGE_TEMPLATE}
+                  onValueChange={(val) =>
+                    setMapping((m) => {
+                      const next = { ...m };
+                      if (val === IMAGE_PRODUCT) {
+                        next.headerImage = { type: 'field', value: IMAGE_PRODUCT };
+                      } else {
+                        delete next.headerImage;
+                      }
+                      return next;
+                    })
+                  }
+                >
+                  <SelectTrigger className="border-border bg-muted text-foreground w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="border-border bg-popover">
+                    <SelectItem value={IMAGE_TEMPLATE}>
+                      {t('headerImageTemplate')}
+                    </SelectItem>
+                    <SelectItem value={IMAGE_PRODUCT}>
+                      {t('headerImageProduct')}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-muted-foreground text-xs">
+                  {mapping.headerImage && !hasApiCredentials
+                    ? t('headerImageNeedsApi')
+                    : t('headerImageHint')}
+                </p>
               </div>
             )}
 

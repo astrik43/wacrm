@@ -26,6 +26,16 @@ and when the shipment is out for delivery or delivered.
   an approved template and map its placeholders for each of the six
   updates. An activity list shows what was sent, skipped or failed and
   why. Setup and limits are in `docs/shopify.md`.
+- **Product image in order updates.** A template with an image header
+  can show the first product in the order. Paste the credentials of a
+  Shopify Dev Dashboard app (`read_products`) under Settings → Shopify
+  → Product images, then set the update's header image to the product
+  image. Falls back to the template's own image when a product has
+  none.
+
+> **Migration required:** apply `supabase/migrations/044_shopify_api_credentials.sql`
+> (four nullable columns on `shopify_configs`). Apply it **before**
+> deploying this version: the Shopify webhook reads those columns.
 
 ## [0.8.1] — 2026-07-10
 

@@ -149,3 +149,94 @@ describe('resolveSendParams', () => {
     });
   });
 });
+
+describe('image header', () => {
+  const IMAGE_TEMPLATE: MessageTemplate = {
+    ...TEMPLATE,
+    header_type: 'image',
+    header_content: undefined,
+    header_media_url: 'https://cdn.example.com/default.jpg',
+    body_text: 'Thanks for your order!',
+    buttons: [],
+  };
+  const PRODUCT_IMAGE = {
+    body: [],
+    headerImage: { type: 'field', value: 'product_image_url' },
+  };
+
+  it('accepts only an image field as the header image', () => {
+    expect(parseVariableMapping(PRODUCT_IMAGE)).toEqual(PRODUCT_IMAGE);
+    expect(
+      parseVariableMapping({
+        headerImage: { type: 'field', value: 'order_number' },
+      })
+    ).toBeNull();
+    expect(
+      parseVariableMapping({
+        headerImage: { type: 'static', value: 'https://evil.example/x.jpg' },
+      })
+    ).toBeNull();
+  });
+
+  it('is optional, and wrong on a template without an image header', () => {
+    const mapping = parseVariableMapping(PRODUCT_IMAGE)!;
+    expect(
+      validateVariableMapping(IMAGE_TEMPLATE, { body: [] }, 'order_created')
+    ).toEqual([]);
+    expect(
+      validateVariableMapping(IMAGE_TEMPLATE, mapping, 'order_created')
+    ).toEqual([]);
+    expect(
+      validateVariableMapping(
+        { ...IMAGE_TEMPLATE, header_type: undefined },
+        mapping,
+        'order_created'
+      )
+    ).toEqual(['not_applicable:header_image']);
+  });
+
+  it('refuses a picture link in a text placeholder', () => {
+    const mapping = parseVariableMapping({
+      ...FULL,
+      body: [FULL.body[0], { type: 'field', value: 'product_image_url' }],
+    })!;
+    expect(validateVariableMapping(TEMPLATE, mapping, 'tracking_added')).toEqual([
+      'not_applicable:body_2',
+    ]);
+  });
+
+  it('sends the product picture when the order has one', () => {
+    const mapping = parseVariableMapping(PRODUCT_IMAGE)!;
+    expect(
+      resolveSendParams(IMAGE_TEMPLATE, mapping, {
+        product_image_url: 'https://cdn.shopify.com/p.jpg',
+      })
+    ).toEqual({
+      ok: true,
+      params: { body: [], headerMediaUrl: 'https://cdn.shopify.com/p.jpg' },
+    });
+  });
+
+  it('falls back to the image saved with the template', () => {
+    const mapping = parseVariableMapping(PRODUCT_IMAGE)!;
+    const resolved = resolveSendParams(IMAGE_TEMPLATE, mapping, {});
+    expect(resolved).toEqual({ ok: true, params: { body: [] } });
+    if (!resolved.ok) throw new Error('expected ok');
+    expect(buildSendComponents(IMAGE_TEMPLATE, resolved.params)).toEqual([
+      {
+        type: 'header',
+        parameters: [
+          { type: 'image', image: { link: 'https://cdn.example.com/default.jpg' } },
+        ],
+      },
+    ]);
+  });
+
+  it('skips when there is neither a product picture nor a template image', () => {
+    const bare = { ...IMAGE_TEMPLATE, header_media_url: undefined };
+    expect(resolveSendParams(bare, { body: [] }, {})).toEqual({
+      ok: false,
+      missing: 'header_image',
+    });
+  });
+});

@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-const mocks = vi.hoisted(() => ({ notify: vi.fn() }));
+const mocks = vi.hoisted(() => ({ notify: vi.fn(), fetchImage: vi.fn() }));
 
 vi.mock('./notify', () => ({ notifyShopifyEvent: mocks.notify }));
+vi.mock('./admin-api', () => ({ fetchLineItemImage: mocks.fetchImage }));
 
 import type { ShopifyConfigRow } from './config';
 import { processShopifyWebhook } from './process';
@@ -17,6 +18,10 @@ const CONFIG: ShopifyConfigRow = {
   default_country_code: '91',
   is_active: true,
   last_webhook_at: null,
+  api_client_id: null,
+  api_client_secret: null,
+  api_access_token: null,
+  api_token_expires_at: null,
 };
 
 interface FakeState {
@@ -87,6 +92,7 @@ const NEW = {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.notify.mockResolvedValue({ status: 'sent', messageId: 'm' });
+  mocks.fetchImage.mockResolvedValue(null);
 });
 
 describe('processShopifyWebhook — orders', () => {
@@ -116,6 +122,38 @@ describe('processShopifyWebhook — orders', () => {
         orderName: '#1042',
         webhookId: 'wh-1',
       })
+    );
+  });
+
+  it('stores the first item\'s picture with the order and passes it on', async () => {
+    mocks.fetchImage.mockResolvedValue('https://cdn.shopify.com/p.jpg');
+    const state = freshState();
+    await processShopifyWebhook(
+      fakeDb(state),
+      CONFIG,
+      'orders/create',
+      { ...ORDER, line_items: [{ variant_id: 11, product_id: 22, title: 'Cap' }] },
+      null
+    );
+
+    expect(mocks.fetchImage).toHaveBeenCalledWith(expect.anything(), CONFIG, {
+      variantId: '11',
+      productId: '22',
+    });
+    expect(
+      (state.orderUpserts[0].row.fields as Record<string, string>).product_image_url
+    ).toBe('https://cdn.shopify.com/p.jpg');
+    expect(mocks.notify.mock.calls[0][2].fields.product_image_url).toBe(
+      'https://cdn.shopify.com/p.jpg'
+    );
+  });
+
+  it('still announces the order when no picture is found', async () => {
+    const state = freshState();
+    await processShopifyWebhook(fakeDb(state), CONFIG, 'orders/create', ORDER, null);
+    expect(mocks.notify).toHaveBeenCalledTimes(1);
+    expect(mocks.notify.mock.calls[0][2].fields).not.toHaveProperty(
+      'product_image_url'
     );
   });
 
@@ -272,5 +310,45 @@ describe('processShopifyWebhook — fulfillments', () => {
       orderName: '#1042',
       customerName: 'Priya Nair',
     });
+  });
+
+  it('reuses the stored picture, and looks one up only for an unseen order', async () => {
+    const seen = freshState({
+      storedOrder: {
+        ...STORED_ORDER,
+        fields: { ...STORED_ORDER.fields, product_image_url: 'https://cdn/stored.jpg' },
+      },
+      rpcResult: NEW,
+    });
+    await processShopifyWebhook(fakeDb(seen), CONFIG, 'fulfillments/create', FULFILLMENT, null);
+    expect(mocks.fetchImage).not.toHaveBeenCalled();
+    expect(mocks.notify.mock.calls[0][2].fields.product_image_url).toBe(
+      'https://cdn/stored.jpg'
+    );
+
+    mocks.notify.mockClear();
+    mocks.fetchImage.mockResolvedValue('https://cdn/looked-up.jpg');
+    vi.useFakeTimers();
+    try {
+      const unseen = freshState({ storedOrder: null, rpcResult: NEW });
+      const run = processShopifyWebhook(
+        fakeDb(unseen),
+        CONFIG,
+        'fulfillments/create',
+        { ...FULFILLMENT, line_items: [{ variant_id: 11, product_id: 22 }] },
+        null
+      );
+      await vi.runAllTimersAsync();
+      await run;
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(mocks.fetchImage).toHaveBeenCalledWith(expect.anything(), CONFIG, {
+      variantId: '11',
+      productId: '22',
+    });
+    expect(mocks.notify.mock.calls[0][2].fields.product_image_url).toBe(
+      'https://cdn/looked-up.jpg'
+    );
   });
 });

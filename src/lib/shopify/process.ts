@@ -17,6 +17,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { fetchLineItemImage } from './admin-api';
 import type { ShopifyConfigRow } from './config';
 import {
   deriveFulfillmentEvents,
@@ -28,6 +29,7 @@ import {
   extractFulfillmentFields,
   extractOrderCustomer,
   extractOrderFields,
+  firstLineItemRef,
   type ShopifyFields,
 } from './order-fields';
 import { notifyShopifyEvent } from './notify';
@@ -109,6 +111,11 @@ async function handleOrder(
 
   const accountId = config.account_id;
   const fields = extractOrderFields(order);
+  // Stored with the order, so every later shipment update for it can
+  // show the same picture without another lookup. Null (no
+  // credentials, no image, Shopify down) just means no picture.
+  const imageUrl = await fetchLineItemImage(db, config, firstLineItemRef(order));
+  if (imageUrl) fields.product_image_url = imageUrl;
   const { fullName } = extractOrderCustomer(order);
   const phone = orderPhone(order, config.default_country_code);
   const cancelledAt = timestamp(order.cancelled_at);
@@ -216,6 +223,17 @@ async function handleFulfillment(
     order = await loadOrder(db, accountId, orderId);
   }
   if (order?.cancelled_at) return;
+
+  // An order placed before the store was connected never had its
+  // picture looked up; the shipment lists the same items.
+  if (!order) {
+    const imageUrl = await fetchLineItemImage(
+      db,
+      config,
+      firstLineItemRef(fulfillment)
+    );
+    if (imageUrl) fulfillmentFields.product_image_url = imageUrl;
+  }
 
   const destination = obj(fulfillment.destination);
   const phone =
