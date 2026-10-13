@@ -44,6 +44,29 @@ and when the shipment is out for delivery or delivered.
 > table). Apply them **before** deploying this version: the Shopify
 > webhook reads the new columns.
 
+- **Shopify: COD and prepaid templates.** An order or shipment update
+  can use a different template for cash-on-delivery and prepaid orders
+  (*Applies to* in the update's settings).
+- **Shopify: delays.** Any update can wait before sending. Delayed
+  messages are listed as Scheduled and are cancelled if the order is
+  cancelled first. **Needs a scheduler** calling
+  `GET /api/shopify/cron` every minute with `AUTOMATION_CRON_SECRET`;
+  see `docs/shopify.md`.
+- **Shopify: COD confirmation page.** A template button can open a
+  public page (`/o/<token>`) where the customer confirms or cancels the
+  order; the answer is added to the Shopify order as the tag
+  `COD confirmed` or `cancelled by WA CRM`. Needs the Shopify app's
+  `write_orders` scope.
+- **Shopify: cart reminders.** Up to three reminders for an abandoned
+  checkout, each with its own delay and template, cancelled when the
+  customer orders. Needs the *Checkout creation* and *Checkout update*
+  webhooks.
+
+> **Migration required:** apply `supabase/migrations/046_shopify_delay_cod_cart.sql`
+> (new columns on four `shopify_*` tables, a new `shopify_checkouts`
+> table, and the unique index on `shopify_event_templates` now includes
+> the payment variant). Apply it **before** deploying this version.
+
 ## [0.8.1] — 2026-07-10
 
 Fixes inbound chats fragmenting into multiple threads for the same

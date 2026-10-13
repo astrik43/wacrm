@@ -1,9 +1,11 @@
 // ============================================================
 // /api/shopify/events
 //
-//   GET — the six order updates with their switch, template and
-//         variable mapping (defaults for ones never configured).
-//   PUT — save one update's settings (admin+).
+//   GET — every update with its switch, template, delay and variable
+//         mapping (defaults for ones never configured). Order and
+//         shipment updates come once per payment variant (all orders,
+//         COD, prepaid); cart reminders only as "all".
+//   PUT — save one update's settings for one variant (admin+).
 //
 // An update can only be switched ON with an APPROVED template whose
 // every placeholder is mapped — otherwise each order would be logged
@@ -22,7 +24,15 @@ import {
   rateLimitResponse,
   RATE_LIMITS,
 } from '@/lib/rate-limit';
-import { SHOPIFY_EVENTS, isShopifyEvent } from '@/lib/shopify/events';
+import {
+  MAX_DELAY_MINUTES,
+  MIN_CART_DELAY_MINUTES,
+  SHOPIFY_EVENTS,
+  isCartEvent,
+  isShopifyEvent,
+  isShopifyVariant,
+  variantsForEvent,
+} from '@/lib/shopify/events';
 import {
   parseVariableMapping,
   validateVariableMapping,
@@ -30,10 +40,12 @@ import {
 import { resolveTemplateRow } from '@/lib/whatsapp/template-body';
 
 const COLUMNS =
-  'event, is_enabled, template_name, template_language, variable_mapping, updated_at';
+  'event, variant, is_enabled, template_name, template_language, variable_mapping, delay_minutes, updated_at';
 
 interface EventRow {
   event: string;
+  variant: string;
+  delay_minutes: number | null;
   is_enabled: boolean;
   template_name: string | null;
   template_language: string | null;
@@ -57,22 +69,29 @@ export async function GET() {
       );
     }
 
-    const byEvent = new Map(
-      ((data as EventRow[] | null) ?? []).map((row) => [row.event, row])
+    const byKey = new Map(
+      ((data as EventRow[] | null) ?? []).map((row) => [
+        `${row.event}:${row.variant}`,
+        row,
+      ])
     );
-    const events = SHOPIFY_EVENTS.map((event) => {
-      const row = byEvent.get(event);
-      return {
-        event,
-        is_enabled: row?.is_enabled ?? false,
-        template_name: row?.template_name ?? null,
-        template_language: row?.template_language ?? null,
-        variable_mapping: parseVariableMapping(row?.variable_mapping) ?? {
-          body: [],
-        },
-        updated_at: row?.updated_at ?? null,
-      };
-    });
+    const events = SHOPIFY_EVENTS.flatMap((event) =>
+      variantsForEvent(event).map((variant) => {
+        const row = byKey.get(`${event}:${variant}`);
+        return {
+          event,
+          variant,
+          is_enabled: row?.is_enabled ?? false,
+          template_name: row?.template_name ?? null,
+          template_language: row?.template_language ?? null,
+          variable_mapping: parseVariableMapping(row?.variable_mapping) ?? {
+            body: [],
+          },
+          delay_minutes: row?.delay_minutes ?? 0,
+          updated_at: row?.updated_at ?? null,
+        };
+      })
+    );
 
     return NextResponse.json({ events });
   } catch (err) {
@@ -92,6 +111,8 @@ export async function PUT(request: Request) {
 
     const body = (await request.json().catch(() => null)) as {
       event?: unknown;
+      variant?: unknown;
+      delay_minutes?: unknown;
       is_enabled?: unknown;
       template_name?: unknown;
       template_language?: unknown;
@@ -100,11 +121,33 @@ export async function PUT(request: Request) {
 
     if (!isShopifyEvent(body?.event)) {
       return NextResponse.json(
-        { error: "'event' must be one of the six order updates" },
+        { error: "'event' must be one of the Shopify updates" },
         { status: 400 }
       );
     }
     const event = body.event;
+
+    const variant = body.variant === undefined ? 'all' : body.variant;
+    if (!isShopifyVariant(variant) || !variantsForEvent(event).includes(variant)) {
+      return NextResponse.json(
+        { error: "'variant' is not available for this update" },
+        { status: 400 }
+      );
+    }
+
+    const delayMinutes =
+      body.delay_minutes === undefined ? 0 : body.delay_minutes;
+    if (
+      typeof delayMinutes !== 'number' ||
+      !Number.isInteger(delayMinutes) ||
+      delayMinutes < 0 ||
+      delayMinutes > MAX_DELAY_MINUTES
+    ) {
+      return NextResponse.json(
+        { error: "'delay_minutes' must be a whole number from 0 to 43200" },
+        { status: 400 }
+      );
+    }
     const isEnabled = body.is_enabled === true;
     const templateName =
       typeof body.template_name === 'string' && body.template_name.trim()
@@ -119,6 +162,15 @@ export async function PUT(request: Request) {
     if (!mapping) {
       return NextResponse.json(
         { error: "'variable_mapping' has an invalid shape" },
+        { status: 400 }
+      );
+    }
+
+    if (isEnabled && isCartEvent(event) && delayMinutes < MIN_CART_DELAY_MINUTES) {
+      return NextResponse.json(
+        {
+          error: `A cart reminder needs a delay of at least ${MIN_CART_DELAY_MINUTES} minutes`,
+        },
         { status: 400 }
       );
     }
@@ -167,6 +219,8 @@ export async function PUT(request: Request) {
         {
           account_id: ctx.accountId,
           event,
+          variant,
+          delay_minutes: delayMinutes,
           is_enabled: isEnabled,
           template_name: templateName,
           template_language: templateLanguage,
@@ -176,7 +230,7 @@ export async function PUT(request: Request) {
             body: Array.from(mapping.body, (s) => s ?? null),
           },
         },
-        { onConflict: 'account_id,event' }
+        { onConflict: 'account_id,event,variant' }
       )
       .select(COLUMNS)
       .single();

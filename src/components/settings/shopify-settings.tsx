@@ -3,12 +3,14 @@
 // ============================================================
 // ShopifySettings — Settings → Shopify
 //
-// Three parts, top to bottom:
+// Top to bottom:
 //   1. Connection — paste Shopify's webhook signing secret, copy the
-//      webhook URL, and see which four webhooks to add in Shopify.
-//   2. Order updates — one row per update (order created, tracking
-//      added, …) with its switch and template.
-//   3. Activity — what was sent, skipped or failed, and why.
+//      webhook URL, and see which webhooks to add in Shopify.
+//   2. Shopify app — credentials for product pictures and order tags.
+//   3. Order updates and cart reminders — one row per update with its
+//      switch and template; a COD or prepaid template shows as a
+//      sub-row under its update.
+//   4. Activity — what was sent, scheduled, skipped or failed, and why.
 //
 // Any member can read; admin+ changes things (gated here by
 // <RequireRole> / canEditSettings and on the server by requireRole +
@@ -29,7 +31,12 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { RequireRole } from '@/components/auth/require-role';
 import { useAuth } from '@/hooks/use-auth';
-import { SHOPIFY_TOPICS, type ShopifyEvent } from '@/lib/shopify/events';
+import {
+  SHOPIFY_TOPICS,
+  isCartEvent,
+  type ShopifyEvent,
+  type ShopifyVariant,
+} from '@/lib/shopify/events';
 import { SettingsPanelHead } from './settings-panel-head';
 import { ShopifyWebhookLog, shopifyReasonText } from './shopify-webhook-log';
 import {
@@ -46,6 +53,8 @@ interface ShopifyConfig {
   /** Null for non-admins. */
   webhook_path: string | null;
   has_api_credentials: boolean;
+  /** Whether the app may tag orders; null = not known yet. */
+  can_tag_orders: boolean | null;
   /** Null for non-admins. */
   api_client_id: string | null;
 }
@@ -55,8 +64,9 @@ interface ShopifyNotification {
   event: ShopifyEvent;
   order_name: string | null;
   shopify_order_id: string | null;
-  status: 'pending' | 'sent' | 'skipped' | 'failed';
+  status: 'pending' | 'scheduled' | 'sent' | 'skipped' | 'failed' | 'cancelled';
   reason: string | null;
+  send_at: string | null;
   created_at: string;
 }
 
@@ -73,11 +83,22 @@ function fmtDateTime(iso: string): string {
   });
 }
 
+function fmtDelay(
+  t: ReturnType<typeof useTranslations>,
+  minutes: number
+): string {
+  if (minutes % 1440 === 0) return t('delayDays', { count: minutes / 1440 });
+  if (minutes % 60 === 0) return t('delayHours', { count: minutes / 60 });
+  return t('delayMinutes', { count: minutes });
+}
+
 const STATUS_STYLE: Record<string, string> = {
   sent: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300',
   skipped: 'border-border bg-muted text-muted-foreground',
   failed: 'border-red-500/40 bg-red-500/10 text-red-600 dark:text-red-300',
   pending: 'border-border bg-muted text-muted-foreground',
+  scheduled: 'border-sky-500/40 bg-sky-500/10 text-sky-600 dark:text-sky-300',
+  cancelled: 'border-border bg-muted text-muted-foreground',
   unknown: 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-300',
 };
 
@@ -98,8 +119,12 @@ export function ShopifySettings() {
   const [apiClientSecret, setApiClientSecret] = useState('');
   const [shopDomain, setShopDomain] = useState('');
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
-  const [editing, setEditing] = useState<ShopifyEventSetting | null>(null);
-  const [toggling, setToggling] = useState<ShopifyEvent | null>(null);
+  const [editing, setEditing] = useState<{
+    event: ShopifyEvent;
+    variant: ShopifyVariant;
+  } | null>(null);
+  const [toggling, setToggling] = useState<string | null>(null);
+  const [overdue, setOverdue] = useState(0);
 
   const load = useCallback(async () => {
     try {
@@ -120,12 +145,14 @@ export function ShopifySettings() {
       };
       const activityData = (await activityRes.json()) as {
         notifications: ShopifyNotification[];
+        overdue?: number;
       };
       setConfig(configData.config);
       setCountryCode(configData.config?.default_country_code ?? '');
       setApiClientId(configData.config?.api_client_id ?? '');
       setEvents(eventsData.events);
       setActivity(activityData.notifications);
+      setOverdue(activityData.overdue ?? 0);
     } catch (err) {
       console.error('[ShopifySettings] load error:', err);
       toast.error(t('networkError'));
@@ -223,10 +250,10 @@ export function ShopifySettings() {
     // Switching on needs a template and a complete mapping — open the
     // dialog instead of letting the server reject it.
     if (next && !setting.template_name) {
-      setEditing({ ...setting, is_enabled: true });
+      setEditing({ event: setting.event, variant: setting.variant });
       return;
     }
-    setToggling(setting.event);
+    setToggling(`${setting.event}:${setting.variant}`);
     try {
       const res = await fetch('/api/shopify/events', {
         method: 'PUT',
@@ -240,7 +267,9 @@ export function ShopifySettings() {
       }
       setEvents((prev) =>
         prev.map((e) =>
-          e.event === setting.event ? { ...e, is_enabled: next } : e
+          e.event === setting.event && e.variant === setting.variant
+            ? { ...e, is_enabled: next }
+            : e
         )
       );
     } catch (err) {
@@ -267,6 +296,26 @@ export function ShopifySettings() {
       </div>
     );
   }
+
+  // One row per update; a COD / prepaid template that has been set up
+  // shows as its own sub-row.
+  const visibleRows = events.filter(
+    (e) => e.variant === 'all' || e.template_name
+  );
+  const groups = [
+    {
+      key: 'orders',
+      title: t('eventsTitle'),
+      desc: t('eventsDesc'),
+      rows: visibleRows.filter((e) => !isCartEvent(e.event)),
+    },
+    {
+      key: 'carts',
+      title: t('cartTitle'),
+      desc: t('cartDesc'),
+      rows: visibleRows.filter((e) => isCartEvent(e.event)),
+    },
+  ];
 
   const webhookUrl =
     config?.webhook_path && typeof window !== 'undefined'
@@ -440,6 +489,11 @@ export function ShopifySettings() {
               <p className="text-muted-foreground mt-1 text-sm">
                 {t('productImagesDesc')}
               </p>
+              {config.has_api_credentials && config.can_tag_orders !== null && (
+                <p className="text-muted-foreground mt-1 text-sm">
+                  {config.can_tag_orders ? t('tagOrdersOn') : t('tagOrdersOff')}
+                </p>
+              )}
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
@@ -518,51 +572,68 @@ export function ShopifySettings() {
         </Card>
       )}
 
-      {/* ---- Order updates --------------------------------------- */}
-      <div>
-        <h3 className="text-foreground text-sm font-semibold">{t('eventsTitle')}</h3>
-        <p className="text-muted-foreground mt-1 text-sm">{t('eventsDesc')}</p>
-        <Card className="mt-3">
-          <CardContent className="p-0">
-            <ul className="divide-border divide-y">
-              {events.map((setting) => (
-                <li
-                  key={setting.event}
-                  className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:gap-4"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="text-foreground text-sm font-medium">
-                      {t(`events.${setting.event}.label`)}
-                    </p>
-                    <p className="text-muted-foreground mt-0.5 text-xs">
-                      {setting.template_name
-                        ? t('usingTemplate', { name: setting.template_name })
-                        : t('notConfigured')}
-                    </p>
-                  </div>
-                  <RequireRole min="admin">
-                    <div className="flex items-center gap-3">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setEditing(setting)}
-                      >
-                        {setting.template_name ? t('edit') : t('configure')}
-                      </Button>
-                      <Switch
-                        checked={setting.is_enabled}
-                        disabled={toggling === setting.event}
-                        onCheckedChange={(next) => handleToggle(setting, next)}
-                        aria-label={t(`events.${setting.event}.label`)}
-                      />
-                    </div>
-                  </RequireRole>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      </div>
+      {/* ---- Order updates / cart reminders ---------------------- */}
+      {groups.map((group) => (
+        <div key={group.key}>
+          <h3 className="text-foreground text-sm font-semibold">{group.title}</h3>
+          <p className="text-muted-foreground mt-1 text-sm">{group.desc}</p>
+          <Card className="mt-3">
+            <CardContent className="p-0">
+              <ul className="divide-border divide-y">
+                {group.rows.map((setting) => {
+                  const rowKey = `${setting.event}:${setting.variant}`;
+                  const label =
+                    setting.variant === 'all'
+                      ? t(`events.${setting.event}.label`)
+                      : `${t(`events.${setting.event}.label`)} · ${t(`variants.${setting.variant}`)}`;
+                  return (
+                    <li
+                      key={rowKey}
+                      className={`flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:gap-4 ${
+                        setting.variant === 'all' ? '' : 'sm:pl-8'
+                      }`}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="text-foreground text-sm font-medium">{label}</p>
+                        <p className="text-muted-foreground mt-0.5 text-xs">
+                          {setting.template_name
+                            ? t('usingTemplate', { name: setting.template_name })
+                            : t('notConfigured')}
+                          {setting.template_name && setting.delay_minutes > 0
+                            ? ` · ${fmtDelay(t, setting.delay_minutes)}`
+                            : ''}
+                        </p>
+                      </div>
+                      <RequireRole min="admin">
+                        <div className="flex items-center gap-3">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              setEditing({
+                                event: setting.event,
+                                variant: setting.variant,
+                              })
+                            }
+                          >
+                            {setting.template_name ? t('edit') : t('configure')}
+                          </Button>
+                          <Switch
+                            checked={setting.is_enabled}
+                            disabled={toggling === rowKey}
+                            onCheckedChange={(next) => handleToggle(setting, next)}
+                            aria-label={label}
+                          />
+                        </div>
+                      </RequireRole>
+                    </li>
+                  );
+                })}
+              </ul>
+            </CardContent>
+          </Card>
+        </div>
+      ))}
 
       {/* ---- Activity -------------------------------------------- */}
       <div>
@@ -586,6 +657,11 @@ export function ShopifySettings() {
             {t('refresh')}
           </Button>
         </div>
+        {overdue > 0 && (
+          <p className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-300">
+            {t('overdueWarning', { count: overdue })}
+          </p>
+        )}
         <Card className="mt-3">
           <CardContent className="p-0">
             {activity.length === 0 ? (
@@ -618,6 +694,11 @@ export function ShopifySettings() {
                             {shopifyReasonText(t, n.reason)}
                           </p>
                         )}
+                        {n.status === 'scheduled' && n.send_at && (
+                          <p className="text-muted-foreground mt-0.5 text-xs">
+                            {t('sendsAt', { date: fmtDateTime(n.send_at) })}
+                          </p>
+                        )}
                       </div>
                       <span className="text-muted-foreground text-xs">
                         {fmtDateTime(n.created_at)}
@@ -641,7 +722,8 @@ export function ShopifySettings() {
 
       {editing && (
         <ShopifyEventDialog
-          setting={editing}
+          settings={events.filter((e) => e.event === editing.event)}
+          initialVariant={editing.variant}
           hasApiCredentials={config?.has_api_credentials ?? false}
           onOpenChange={(open) => {
             if (!open) setEditing(null);

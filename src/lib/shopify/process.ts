@@ -13,23 +13,32 @@
 //     stale deliveries and hands back the previous state atomically;
 //   - a fulfillment whose order we don't have yet waits briefly, then
 //     falls back to the phone on the shipment's destination address.
+//
+// Abandoned checkouts (`checkouts/*`) schedule up to three cart
+// reminders; a completed checkout, or an order from the same phone,
+// cancels the ones still waiting.
 // ============================================================
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { fetchLineItemImage } from './admin-api';
-import type { ShopifyConfigRow } from './config';
+import { generateWebhookToken, type ShopifyConfigRow } from './config';
 import {
+  CART_EVENTS,
   deriveFulfillmentEvents,
+  isPaymentMode,
   type FulfillmentState,
+  type PaymentMode,
   type ShopifyEvent,
   type ShopifyTopic,
 } from './events';
 import {
+  extractCheckoutFields,
   extractFulfillmentFields,
   extractOrderCustomer,
   extractOrderFields,
   firstLineItemRef,
+  paymentModeOf,
   type ShopifyFields,
 } from './order-fields';
 import { notifyShopifyEvent, type NotifyOutcome } from './notify';
@@ -58,7 +67,9 @@ export interface ProcessResult {
     | 'order_already_cancelled'
     | 'stale_update'
     | 'no_change'
-    | 'order_cancelled';
+    | 'order_cancelled'
+    | 'checkout_completed'
+    | 'no_phone';
   outcomes: ProcessOutcome[];
 }
 
@@ -69,6 +80,46 @@ function toOutcome(event: ShopifyEvent, outcome: NotifyOutcome): ProcessOutcome 
 }
 
 const ORDER_WAIT_MS = 2000;
+
+/** Where the public confirmation page lives, when the deployment says. */
+function confirmUrl(token: string): string | null {
+  const origin = (process.env.NEXT_PUBLIC_SITE_URL ?? '').trim().replace(/\/+$/, '');
+  return /^https?:\/\//.test(origin) ? `${origin}/o/${token}` : null;
+}
+
+/**
+ * Stop notifications that are still waiting for their send time.
+ * `filter` narrows the rows; failures are logged and swallowed — the
+ * cron re-checks every row before sending, so this is an early exit,
+ * not the only guard.
+ */
+async function cancelScheduled(
+  db: SupabaseClient,
+  accountId: string,
+  reason: string,
+  filter: {
+    orderId?: string;
+    checkoutId?: string;
+    phone?: string;
+    cartOnly?: boolean;
+    exceptEvent?: ShopifyEvent;
+  }
+): Promise<void> {
+  let query = db
+    .from('shopify_notifications')
+    .update({ status: 'cancelled', reason, payload: null })
+    .eq('account_id', accountId)
+    .eq('status', 'scheduled');
+  if (filter.orderId) query = query.eq('shopify_order_id', filter.orderId);
+  if (filter.checkoutId) query = query.eq('shopify_checkout_id', filter.checkoutId);
+  if (filter.phone) query = query.eq('payload->>phone', filter.phone);
+  if (filter.cartOnly) query = query.in('event', [...CART_EVENTS]);
+  if (filter.exceptEvent) query = query.neq('event', filter.exceptEvent);
+  const { error } = await query;
+  if (error) {
+    console.error('[shopify] could not cancel scheduled sends:', error.message);
+  }
+}
 
 function obj(value: unknown): Json | null {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -114,6 +165,8 @@ interface StoredOrder {
   customer_name: string | null;
   fields: ShopifyFields | null;
   cancelled_at: string | null;
+  payment_mode: string | null;
+  confirm_token: string | null;
 }
 
 async function loadOrder(
@@ -123,7 +176,9 @@ async function loadOrder(
 ): Promise<StoredOrder | null> {
   const { data } = await db
     .from('shopify_orders')
-    .select('order_name, phone, customer_name, fields, cancelled_at')
+    .select(
+      'order_name, phone, customer_name, fields, cancelled_at, payment_mode, confirm_token'
+    )
     .eq('account_id', accountId)
     .eq('shopify_order_id', orderId)
     .maybeSingle();
@@ -150,6 +205,17 @@ async function handleOrder(
   const { fullName } = extractOrderCustomer(order);
   const phone = orderPhone(order, config.default_country_code);
   const cancelledAt = timestamp(order.cancelled_at);
+  const paymentMode = paymentModeOf(order);
+  // The link in a message already sent must keep working, so a
+  // cancellation (which overwrites the row) reuses the order's token.
+  const existing =
+    topic === 'orders/cancelled'
+      ? await loadOrder(db, accountId, orderId)
+      : null;
+  const confirmToken = existing?.confirm_token ?? generateWebhookToken();
+  fields.cod_confirm_token = confirmToken;
+  const url = confirmUrl(confirmToken);
+  if (url) fields.cod_confirm_url = url;
   const row = {
     account_id: accountId,
     shopify_order_id: orderId,
@@ -158,6 +224,8 @@ async function handleOrder(
     customer_name: fullName || null,
     fields,
     cancelled_at: cancelledAt,
+    payment_mode: paymentMode,
+    confirm_token: confirmToken,
     source_updated_at: timestamp(order.updated_at),
   };
 
@@ -175,6 +243,31 @@ async function handleOrder(
 
   const event: ShopifyEvent =
     topic === 'orders/create' ? 'order_created' : 'order_cancelled';
+
+  if (event === 'order_cancelled') {
+    // A delayed "order placed" must not land after the cancellation.
+    await cancelScheduled(db, accountId, 'order_cancelled', {
+      orderId,
+      exceptEvent: 'order_cancelled',
+    });
+  } else {
+    // They bought: the cart reminders have done their job. FlexyPe and
+    // other third-party checkouts create orders with no checkout id,
+    // so the phone is the link that always exists.
+    const checkoutId = idOf(order.checkout_id);
+    if (checkoutId) {
+      await cancelScheduled(db, accountId, 'order_placed', {
+        checkoutId,
+        cartOnly: true,
+      });
+    }
+    if (phone) {
+      await cancelScheduled(db, accountId, 'order_placed', {
+        phone,
+        cartOnly: true,
+      });
+    }
+  }
   // An order that is already cancelled when its create arrives gets
   // the cancellation message only.
   if (event === 'order_created' && cancelledAt) {
@@ -194,12 +287,110 @@ async function handleOrder(
     phone,
     customerName: row.customer_name,
     fields,
+    paymentMode,
     webhookId,
   });
   return {
     orderRef: row.order_name ?? orderId,
     outcomes: [toOutcome(event, outcome)],
   };
+}
+
+interface StoredCheckout {
+  fields: ShopifyFields | null;
+  source_updated_at: string | null;
+}
+
+async function handleCheckout(
+  db: SupabaseClient,
+  config: ShopifyConfigRow,
+  checkout: Json,
+  webhookId: string | null
+): Promise<ProcessResult> {
+  const checkoutId = idOf(checkout.id);
+  if (!checkoutId) return { orderRef: null, note: 'missing_id', outcomes: [] };
+
+  const accountId = config.account_id;
+  const fields = extractCheckoutFields(checkout);
+  const { fullName } = extractOrderCustomer(checkout);
+  const orderRef = fullName || text(checkout.name) || checkoutId;
+  const updatedAt = timestamp(checkout.updated_at);
+  const completedAt = timestamp(checkout.completed_at);
+
+  const { data: existingRow } = await db
+    .from('shopify_checkouts')
+    .select('fields, source_updated_at')
+    .eq('account_id', accountId)
+    .eq('shopify_checkout_id', checkoutId)
+    .maybeSingle();
+  const existing = (existingRow as StoredCheckout | null) ?? null;
+  if (
+    existing?.source_updated_at &&
+    updatedAt &&
+    updatedAt < existing.source_updated_at
+  ) {
+    return { orderRef, note: 'stale_update', outcomes: [] };
+  }
+
+  // Shopify sends an update for every keystroke-level change of a
+  // checkout; look the picture up once and keep it.
+  const imageUrl =
+    existing?.fields?.product_image_url ??
+    (await fetchLineItemImage(db, config, firstLineItemRef(checkout)));
+  if (imageUrl) fields.product_image_url = imageUrl;
+
+  const phone = orderPhone(checkout, config.default_country_code);
+  const { error } = await db.from('shopify_checkouts').upsert(
+    {
+      account_id: accountId,
+      shopify_checkout_id: checkoutId,
+      phone,
+      customer_name: fullName || null,
+      fields,
+      completed_at: completedAt,
+      source_updated_at: updatedAt,
+    },
+    { onConflict: 'account_id,shopify_checkout_id' }
+  );
+  if (error) {
+    console.error('[shopify] checkout upsert failed:', error.message);
+    return { orderRef, note: 'db_error', outcomes: [] };
+  }
+
+  if (completedAt) {
+    await cancelScheduled(db, accountId, 'checkout_completed', {
+      checkoutId,
+      cartOnly: true,
+    });
+    return { orderRef, note: 'checkout_completed', outcomes: [] };
+  }
+  // Wait for the update that carries a phone number; nothing is
+  // claimed, so that later delivery can still schedule the reminders.
+  if (!phone) return { orderRef, note: 'no_phone', outcomes: [] };
+
+  const outcomes: ProcessOutcome[] = [];
+  for (const event of CART_EVENTS) {
+    const outcome = await notifyShopifyEvent(db, accountId, {
+      event,
+      dedupeKey: `${event}:${checkoutId}`,
+      orderId: null,
+      fulfillmentId: null,
+      checkoutId,
+      orderName: orderRef,
+      phone,
+      customerName: fullName || null,
+      fields,
+      webhookId,
+    });
+    // Every later update of the same checkout finds the reminders
+    // already claimed; that is not news.
+    if (outcome.status !== 'duplicate' && outcome.status !== 'disabled') {
+      outcomes.push(toOutcome(event, outcome));
+    }
+  }
+  return outcomes.length > 0
+    ? { orderRef, outcomes }
+    : { orderRef, note: 'no_change', outcomes: [] };
 }
 
 interface ApplyResult {
@@ -301,6 +492,9 @@ async function handleFulfillment(
   };
   const orderName = order?.order_name ?? fields.order_number ?? null;
   const customerName = order?.customer_name ?? fields.customer_name ?? null;
+  const paymentMode: PaymentMode | null = isPaymentMode(order?.payment_mode)
+    ? order.payment_mode
+    : null;
 
   const outcomes: ProcessOutcome[] = [];
   for (const event of events) {
@@ -317,6 +511,7 @@ async function handleFulfillment(
       phone,
       customerName,
       fields,
+      paymentMode,
       webhookId,
     });
     outcomes.push(toOutcome(event, outcome));
@@ -336,6 +531,9 @@ export async function processShopifyWebhook(
 
   if (topic === 'orders/create' || topic === 'orders/cancelled') {
     return handleOrder(db, config, topic, body, webhookId);
+  }
+  if (topic === 'checkouts/create' || topic === 'checkouts/update') {
+    return handleCheckout(db, config, body, webhookId);
   }
   return handleFulfillment(db, config, body, webhookId);
 }

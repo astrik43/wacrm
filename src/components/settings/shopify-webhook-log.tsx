@@ -44,6 +44,10 @@ const KNOWN_REASONS = [
   'template_malformed',
   'mapping_invalid',
   'db_error',
+  'order_cancelled',
+  'order_placed',
+  'checkout_completed',
+  'event_disabled',
 ];
 
 /** Human text for a notification's skip / failure reason code. */
@@ -70,12 +74,14 @@ const KNOWN_DETAILS = [
   'stale_update',
   'no_change',
   'order_cancelled',
+  'checkout_completed',
+  'no_phone',
   'payload_too_large_to_store',
 ];
 
 interface Outcome {
   event: ShopifyEvent;
-  status: 'sent' | 'skipped' | 'failed' | 'duplicate' | 'disabled';
+  status: 'sent' | 'scheduled' | 'skipped' | 'failed' | 'duplicate' | 'disabled';
   reason?: string;
 }
 

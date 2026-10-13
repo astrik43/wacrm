@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  extractCheckoutFields,
   extractFulfillmentFields,
   extractOrderCustomer,
   extractOrderFields,
@@ -8,6 +9,7 @@ import {
   fieldsForEvent,
   firstLineItemRef,
   isImageField,
+  paymentModeOf,
   sanitizeTemplateValue,
 } from './order-fields';
 
@@ -54,12 +56,16 @@ describe('extractOrderFields', () => {
         'https://shop.example.com/12345/orders/abc123/authenticate?key=xyz',
       order_status_url_path: '12345/orders/abc123/authenticate?key=xyz',
       cancel_reason: 'customer',
+      payment_mode: 'Prepaid',
     });
   });
 
   it('omits what the order does not have', () => {
-    expect(extractOrderFields({ name: '#7' })).toEqual({ order_number: '#7' });
-    expect(extractOrderFields(null)).toEqual({});
+    expect(extractOrderFields({ name: '#7' })).toEqual({
+      order_number: '#7',
+      payment_mode: 'Prepaid',
+    });
+    expect(extractOrderFields(null)).toEqual({ payment_mode: 'Prepaid' });
   });
 
   it('falls back to the shipping name when there is no customer', () => {
@@ -131,5 +137,67 @@ describe('firstLineItemRef', () => {
     expect(firstLineItemRef({ line_items: [] })).toBeNull();
     expect(firstLineItemRef({})).toBeNull();
     expect(firstLineItemRef(null)).toBeNull();
+  });
+});
+
+describe('paymentModeOf', () => {
+  it('reads cash on delivery from the order gateways', () => {
+    expect(
+      paymentModeOf({ payment_gateway_names: ['Cash on Delivery (COD)'] })
+    ).toBe('cod');
+    expect(paymentModeOf({ payment_gateway_names: ['cod'] })).toBe('cod');
+    expect(paymentModeOf({ gateway: 'Cash On Delivery' })).toBe('cod');
+    expect(
+      extractOrderFields({ payment_gateway_names: ['Cash on Delivery (COD)'] })
+        .payment_mode
+    ).toBe('Cash on Delivery');
+  });
+
+  it('treats everything else as prepaid', () => {
+    expect(paymentModeOf({ payment_gateway_names: ['razorpay'] })).toBe('prepaid');
+    // "cod" inside another word is not cash on delivery.
+    expect(paymentModeOf({ payment_gateway_names: ['Codex Pay'] })).toBe('prepaid');
+    expect(paymentModeOf({})).toBe('prepaid');
+    expect(paymentModeOf(null)).toBe('prepaid');
+  });
+});
+
+describe('extractCheckoutFields', () => {
+  it('flattens an abandoned checkout like an order', () => {
+    expect(
+      extractCheckoutFields({
+        total_price: '1599.00',
+        presentment_currency: 'INR',
+        customer: { first_name: 'Dinesh', last_name: 'Singh' },
+        line_items: [{ title: 'Heritage Watch', quantity: 1 }],
+        abandoned_checkout_url:
+          'https://shop.example.com/12345/checkouts/ac/abc/recover?key=xyz',
+      })
+    ).toEqual({
+      customer_first_name: 'Dinesh',
+      customer_name: 'Dinesh Singh',
+      order_total: '1599.00',
+      currency: 'INR',
+      item_summary: 'Heritage Watch × 1',
+      item_count: '1',
+      checkout_url:
+        'https://shop.example.com/12345/checkouts/ac/abc/recover?key=xyz',
+      checkout_url_path: '12345/checkouts/ac/abc/recover?key=xyz',
+    });
+  });
+});
+
+describe('fieldsForEvent', () => {
+  it('offers cart links only to cart reminders and order links only to orders', () => {
+    const cart = fieldsForEvent('cart_reminder_1');
+    expect(cart).toContain('checkout_url_path');
+    expect(cart).toContain('customer_first_name');
+    expect(cart).not.toContain('order_number');
+    expect(cart).not.toContain('cod_confirm_token');
+
+    const order = fieldsForEvent('order_created');
+    expect(order).toContain('cod_confirm_token');
+    expect(order).toContain('payment_mode');
+    expect(order).not.toContain('checkout_url');
   });
 });

@@ -50,11 +50,16 @@ Each placeholder — body `{{1}}`, `{{2}}`…, a text-header `{{1}}`, a
 URL-button `{{1}}` — maps to one of:
 
 - Customer first name / full name
-- Order number, order total, currency
+- Order name (the order's `name`, e.g. `#1042`), order total, currency
 - Item summary, item count
-- Order status link, or its path for a URL button
+- Order URL (the order's `order_status_url`), or its path for a URL
+  button
+- Payment mode (`Cash on Delivery` or `Prepaid`)
+- COD confirmation page link, or its suffix for a URL button
 - Tracking number, courier, tracking link (shipment updates only)
 - Cancel reason (order cancelled only)
+- Checkout recovery link, or its path for a URL button (cart reminders
+  only)
 - Fixed text
 
 A field can have a fallback used when the order has no value. If a
@@ -66,6 +71,102 @@ suffix. Create the template with your store as the base
 (`https://your-store.com/{{1}}`) and map the button to *Order status
 link (button suffix)*. A courier tracking link has a different base per
 courier, so put it in the body instead.
+
+## COD and prepaid templates
+
+An order or shipment update can use a different template depending on
+how the order is paid. Open the update, set **Applies to** to *COD
+orders* or *Prepaid orders*, choose its template and switch it on.
+
+- An order is COD when one of its payment gateways is a cash-on-delivery
+  gateway (Shopify's own is named "Cash on Delivery (COD)"). Every other
+  order is prepaid.
+- A COD order uses the COD template when that one is switched on, and
+  the *All orders* template otherwise. The same goes for prepaid.
+- To message only COD orders, set up the COD variant and leave *All
+  orders* off.
+
+## Delays
+
+Every update has **Wait before sending**. `0` sends as soon as Shopify
+reports the change; anything else (up to 30 days) holds the message as
+**Scheduled** in Activity until its time.
+
+- A delayed message is not sent if the order is cancelled, or the
+  update is switched off, before its time. It is listed as
+  **Cancelled** with the reason.
+- The template and mapping are read when the message is sent, so a
+  correction applies to messages already waiting.
+
+> **Delays need a scheduler.** Nothing inside wacrm runs on a timer.
+> Point an external scheduler at `GET /api/shopify/cron` **once a
+> minute**, sending the shared secret in the `x-cron-secret` header
+> (`AUTOMATION_CRON_SECRET`, the same one the automations and flows
+> crons use). On Dokploy, add a **Schedule** to the application with the
+> cron expression `* * * * *` and a command such as:
+>
+> ```sh
+> wget -qO- --header="x-cron-secret: $AUTOMATION_CRON_SECRET" http://localhost:3000/api/shopify/cron
+> ```
+>
+> Without it, delayed messages stay **Scheduled** forever; Settings →
+> Shopify warns when scheduled messages are more than 10 minutes late.
+
+## COD confirmation page
+
+A template button can open a page where the customer confirms or
+cancels the order.
+
+1. Give the Shopify app the **`write_orders`** access scope (see
+   *Product image in the message* for creating the app), release the
+   version and approve it on the store. Settings → Shopify → Shopify app
+   says whether order tagging is available.
+2. Create a template with a **Visit website** button whose URL is
+   `https://<your wacrm domain>/o/{{1}}`.
+3. In the update (usually *Order created*, COD variant), map that button
+   to **COD confirmation page (button suffix)**.
+
+The page shows the product picture, order name, items, total and
+payment mode, with two buttons:
+
+| Button | Tag added to the Shopify order |
+| --- | --- |
+| Confirm order | `COD confirmed` |
+| Cancel order | `cancelled by WA CRM` |
+
+- **Cancel only tags the order.** It does not cancel it in Shopify; act
+  on the tag yourself or with a Shopify Flow.
+- The first answer is final. Opening the link again shows what was
+  chosen.
+- The link is the only thing protecting the page: anyone the customer
+  forwards the message to can answer. It carries a long random token
+  and is never indexed.
+- If Shopify does not take the tag (for example the app lacks
+  `write_orders`), the customer's answer is still stored and the tag is
+  retried by the cron above for up to seven days.
+
+## Cart reminders
+
+Up to three reminders for a checkout that was started and not finished.
+
+1. In Shopify, add two more webhooks to the same URL: **Checkout
+   creation** and **Checkout update**.
+2. Under **Cart reminders**, set up each reminder: a template, a delay
+   of at least 10 minutes, and switch it on. Map a URL button to
+   *Checkout recovery link (button suffix)* with your store as the
+   button's base URL.
+
+- The delay is counted from when a phone number first appears on the
+  checkout.
+- Reminders still waiting are cancelled when the checkout is completed
+  or an order arrives from the same phone number.
+- Cart reminders need the scheduler described under *Delays*.
+
+> **Third-party checkouts.** Shopify only sends checkout webhooks for
+> checkouts that happen in Shopify's own checkout. If your store uses a
+> separate checkout app, carts abandoned there may never reach wacrm.
+> Add the two webhooks and watch the Webhook log for `checkouts/create`
+> before relying on reminders.
 
 ## Product image in the message
 
@@ -128,6 +229,10 @@ skipped rather than guessed.
 - **Pause** keeps accepting webhooks but sends nothing. **Disconnect**
   invalidates the webhook URL (your template mappings are kept).
 
+> **Migration required:** apply
+> `supabase/migrations/046_shopify_delay_cod_cart.sql` before deploying
+> the version with delays, COD / prepaid templates and cart reminders.
+
 ## Webhook log
 
 **Settings → Shopify → Webhook log** (admins only) lists every delivery
@@ -159,6 +264,9 @@ not stored for rejected deliveries.
   on. Collect WhatsApp consent at checkout.
 - **No automatic retry.** A failed send is recorded in Activity with
   the reason and is not attempted again.
+- **Cart reminders are marketing messages.** They go to anyone who
+  typed a phone number at checkout, whether or not they agreed to
+  marketing.
 - **Contact matching** uses the same rule as the rest of wacrm (last 8
   digits), so two contacts whose numbers share those digits can be
   confused.

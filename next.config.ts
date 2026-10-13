@@ -115,6 +115,8 @@ const nextConfig: NextConfig = {
    *     the correct production headers for hashed assets.
    *   - /api/*          — no-store. API responses are per-user and
    *     must never be shared across requests at the edge.
+   *   - /o/*            — no-store. Public order confirmation pages,
+   *     one customer's order each.
    *   - Everything else — public, brief s-maxage + generous
    *     stale-while-revalidate. The edge serves instantly from cache
    *     for the first 5 min, then returns cached content while
@@ -141,7 +143,14 @@ const nextConfig: NextConfig = {
         headers: [{ key: "Cache-Control", value: "no-store" }],
       },
       {
-        source: "/:path((?!_next/static|_next/image|api).*)",
+        // The COD confirmation page shows one customer's order and
+        // changes when they answer; the token in the path is its only
+        // credential. It must never sit in a shared cache.
+        source: "/o/:path*",
+        headers: [{ key: "Cache-Control", value: "private, no-store" }],
+      },
+      {
+        source: "/:path((?!_next/static|_next/image|api|o/).*)",
         headers: [
           {
             key: "Cache-Control",

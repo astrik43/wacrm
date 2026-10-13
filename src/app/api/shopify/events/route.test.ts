@@ -91,10 +91,12 @@ beforeEach(() => {
 });
 
 describe('/api/shopify/events', () => {
-  it('GET lists all six updates, defaulting the unconfigured ones to off', async () => {
+  it('GET lists every update and variant, defaulting the unconfigured ones to off', async () => {
     rows = [
       {
         event: 'delivered',
+        variant: 'cod',
+        delay_minutes: 15,
         is_enabled: true,
         template_name: 'order_delivered',
         template_language: 'en',
@@ -103,11 +105,24 @@ describe('/api/shopify/events', () => {
       },
     ];
     const { events } = await (await GET()).json();
-    expect(events).toHaveLength(6);
-    expect(events.find((e: { event: string }) => e.event === 'delivered')).toMatchObject({
+    // Six order updates in three variants, three cart reminders in one.
+    expect(events).toHaveLength(21);
+    const find = (event: string, variant: string) =>
+      events.find(
+        (e: { event: string; variant: string }) =>
+          e.event === event && e.variant === variant
+      );
+    expect(find('delivered', 'cod')).toMatchObject({
       is_enabled: true,
       template_name: 'order_delivered',
+      delay_minutes: 15,
     });
+    expect(find('delivered', 'all')).toMatchObject({
+      is_enabled: false,
+      delay_minutes: 0,
+    });
+    expect(find('cart_reminder_1', 'all')).toBeDefined();
+    expect(find('cart_reminder_1', 'cod')).toBeUndefined();
     expect(
       events.find((e: { event: string }) => e.event === 'order_created')
     ).toMatchObject({ is_enabled: false, template_name: null });
@@ -165,10 +180,64 @@ describe('/api/shopify/events', () => {
     expect(upserts[0]).toEqual({
       account_id: 'acct-1',
       event: 'order_created',
+      variant: 'all',
+      delay_minutes: 0,
       is_enabled: true,
       template_name: 'order_confirmed',
       template_language: 'en',
       variable_mapping: MAPPING,
+    });
+  });
+
+  it('PUT saves a COD template with a delay as its own variant', async () => {
+    const response = await put({
+      event: 'order_created',
+      variant: 'cod',
+      delay_minutes: 30,
+      is_enabled: true,
+      template_name: 'order_confirmed',
+      template_language: 'en',
+      variable_mapping: MAPPING,
+    });
+    expect(response.status).toBe(200);
+    expect(upserts[0]).toMatchObject({ variant: 'cod', delay_minutes: 30 });
+  });
+
+  it('PUT rejects a bad variant or delay', async () => {
+    const base = {
+      event: 'order_created',
+      template_name: 'order_confirmed',
+      variable_mapping: MAPPING,
+    };
+    expect((await put({ ...base, variant: 'upi' })).status).toBe(400);
+    // A cart has no payment mode yet.
+    expect((await put({ event: 'cart_reminder_1', variant: 'cod' })).status).toBe(400);
+    for (const delay_minutes of [-1, 1.5, 43201, '30']) {
+      expect((await put({ ...base, delay_minutes })).status).toBe(400);
+    }
+    expect(upserts).toEqual([]);
+  });
+
+  it('PUT only switches a cart reminder on with a real delay', async () => {
+    mocks.resolveTemplateRow.mockResolvedValue({
+      row: { ...TEMPLATE, body_text: 'You left something behind.' },
+      malformed: false,
+      language: 'en',
+    });
+    const base = {
+      event: 'cart_reminder_1',
+      is_enabled: true,
+      template_name: 'order_confirmed',
+      variable_mapping: { body: [] },
+    };
+    expect((await put({ ...base, delay_minutes: 5 })).status).toBe(400);
+    expect(upserts).toEqual([]);
+
+    expect((await put({ ...base, delay_minutes: 30 })).status).toBe(200);
+    expect(upserts[0]).toMatchObject({
+      event: 'cart_reminder_1',
+      variant: 'all',
+      delay_minutes: 30,
     });
   });
 });

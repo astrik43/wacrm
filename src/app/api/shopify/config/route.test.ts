@@ -30,6 +30,7 @@ vi.mock('@/lib/shopify/admin-api', () => {
     ShopifyApiError,
     requestAccessToken: mocks.requestAccessToken,
     canReadProducts: (scopes: string[]) => scopes.includes('read_products'),
+    canWriteOrders: (scopes: string[]) => scopes.includes('write_orders'),
     isMyshopifyDomain: (d: unknown) =>
       typeof d === 'string' && /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(d),
   };
@@ -216,6 +217,7 @@ describe('/api/shopify/config', () => {
         api_client_secret: 'enc:client-secret',
         api_access_token: 'enc:shpat_token',
         api_token_expires_at: '2026-10-14T00:00:00.000Z',
+        api_scopes: 'read_products',
         shop_domain: 'acme.myshopify.com',
       },
     ]);
@@ -278,6 +280,7 @@ describe('/api/shopify/config', () => {
         api_client_secret: null,
         api_access_token: null,
         api_token_expires_at: null,
+        api_scopes: null,
       },
     ]);
   });
@@ -295,6 +298,22 @@ describe('/api/shopify/config', () => {
     mocks.getCurrentAccount.mockResolvedValue(ctx(state, 'admin'));
     const admin = await (await GET()).json();
     expect(admin.config.api_client_id).toBe('client-id');
+  });
+
+  it('GET says whether the app may tag orders, once its scopes are known', async () => {
+    mocks.getCurrentAccount.mockResolvedValue(ctx(state, 'admin'));
+    state.existing = { ...ROW, api_client_id: 'client-id' };
+    expect((await (await GET()).json()).config.can_tag_orders).toBeNull();
+
+    state.existing = { ...ROW, api_client_id: 'client-id', api_scopes: 'read_products' };
+    expect((await (await GET()).json()).config.can_tag_orders).toBe(false);
+
+    state.existing = {
+      ...ROW,
+      api_client_id: 'client-id',
+      api_scopes: 'read_products,write_orders',
+    };
+    expect((await (await GET()).json()).config.can_tag_orders).toBe(true);
   });
 
   it('DELETE requires admin and removes the connection', async () => {

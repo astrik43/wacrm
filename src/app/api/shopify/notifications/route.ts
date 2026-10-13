@@ -2,8 +2,9 @@
 // GET /api/shopify/notifications
 //
 // Recent Shopify-triggered sends for the Activity list in Settings →
-// Shopify: one row per order update with its outcome (sent, skipped
-// with a reason, failed with a reason). Any member may read it.
+// Shopify: one row per update with its outcome (sent, scheduled for
+// later, skipped / failed / cancelled with a reason), plus how many
+// scheduled sends are overdue. Any member may read it.
 // ============================================================
 
 import { NextResponse } from 'next/server';
@@ -11,7 +12,10 @@ import { NextResponse } from 'next/server';
 import { getCurrentAccount, toErrorResponse } from '@/lib/auth/account';
 
 const COLUMNS =
-  'id, event, order_name, shopify_order_id, status, reason, created_at';
+  'id, event, order_name, shopify_order_id, status, reason, variant, send_at, created_at';
+// A scheduled send this far past its time means nothing is calling
+// GET /api/shopify/cron.
+const OVERDUE_MS = 10 * 60 * 1000;
 const DEFAULT_LIMIT = 25;
 const MAX_LIMIT = 100;
 
@@ -39,7 +43,17 @@ export async function GET(request: Request) {
       );
     }
 
-    return NextResponse.json({ notifications: data ?? [] });
+    const { count } = await ctx.supabase
+      .from('shopify_notifications')
+      .select('id', { count: 'exact', head: true })
+      .eq('account_id', ctx.accountId)
+      .eq('status', 'scheduled')
+      .lt('send_at', new Date(Date.now() - OVERDUE_MS).toISOString());
+
+    return NextResponse.json({
+      notifications: data ?? [],
+      overdue: count ?? 0,
+    });
   } catch (err) {
     return toErrorResponse(err);
   }
