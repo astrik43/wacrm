@@ -128,6 +128,27 @@ skipped rather than guessed.
 - **Pause** keeps accepting webhooks but sends nothing. **Disconnect**
   invalidates the webhook URL (your template mappings are kept).
 
+## Webhook log
+
+**Settings → Shopify → Webhook log** (admins only) lists every delivery
+Shopify made to your webhook URL in the last 30 days: when it arrived,
+its topic, the order, and what became of it.
+
+| Status | Meaning |
+| --- | --- |
+| Processed | Handled. The Result column lists each customer update and whether it was sent, skipped (with the reason) or failed, or says why there was none (for example an out-of-date shipment update). |
+| Ignored | Accepted but not acted on: the connection is paused, or it is a topic wacrm doesn't use. |
+| Rejected | The signature didn't match the saved signing secret, or the body wasn't JSON. Shopify received an error and will retry. |
+| Error | Processing failed; the message is shown. |
+| Received | Still being processed. If it stays this way, processing was interrupted. |
+
+**View** shows the payload Shopify sent. Payloads contain customer
+names, addresses and phone numbers; they are kept for 30 days and are
+not stored for rejected deliveries.
+
+> **Migration required:** apply
+> `supabase/migrations/045_shopify_webhook_events.sql`.
+
 ## Limits
 
 - **Out for delivery / Delivered** depend on Shopify receiving those

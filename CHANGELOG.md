@@ -33,9 +33,16 @@ and when the shipment is out for delivery or delivered.
   image. Falls back to the template's own image when a product has
   none.
 
+- **Shopify webhook log.** Settings → Shopify now has a table of every
+  delivery Shopify made in the last 30 days, with its topic, order,
+  status and what it led to, plus the payload on demand. Rejected
+  deliveries (bad signature) are listed too. Admins only.
+
 > **Migration required:** apply `supabase/migrations/044_shopify_api_credentials.sql`
-> (four nullable columns on `shopify_configs`). Apply it **before**
-> deploying this version: the Shopify webhook reads those columns.
+> (four nullable columns on `shopify_configs`) and
+> `supabase/migrations/045_shopify_webhook_events.sql` (the webhook log
+> table). Apply them **before** deploying this version: the Shopify
+> webhook reads the new columns.
 
 ## [0.8.1] — 2026-07-10
 

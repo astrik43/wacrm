@@ -110,6 +110,13 @@ BEGIN
       'shopify_configs.api_* columns are missing — migration 044 did not apply';
   END IF;
 
+  -- Shopify webhook log (045). Written by the webhook on every
+  -- delivery through an untyped client.
+  IF to_regclass('public.shopify_webhook_events') IS NULL THEN
+    RAISE EXCEPTION
+      'shopify_webhook_events is missing — migration 045 did not apply';
+  END IF;
+
   RAISE NOTICE 'schema verification passed';
 END
 $$;

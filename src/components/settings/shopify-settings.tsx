@@ -31,6 +31,7 @@ import { RequireRole } from '@/components/auth/require-role';
 import { useAuth } from '@/hooks/use-auth';
 import { SHOPIFY_TOPICS, type ShopifyEvent } from '@/lib/shopify/events';
 import { SettingsPanelHead } from './settings-panel-head';
+import { ShopifyWebhookLog, shopifyReasonText } from './shopify-webhook-log';
 import {
   ShopifyEventDialog,
   type ShopifyEventSetting,
@@ -62,14 +63,6 @@ interface ShopifyNotification {
 // A claim that never reached sent/skipped/failed means the process
 // died mid-send; after this long we stop calling it "sending".
 const PENDING_STALE_MS = 5 * 60 * 1000;
-
-const KNOWN_REASONS = [
-  'no_phone',
-  'template_not_found',
-  'template_not_approved',
-  'template_malformed',
-  'mapping_invalid',
-] as const;
 
 function fmtDateTime(iso: string): string {
   return new Date(iso).toLocaleString(undefined, {
@@ -265,19 +258,6 @@ export function ShopifySettings() {
     } catch {
       toast.error(t('copyFailed'));
     }
-  }
-
-  function reasonText(reason: string | null): string {
-    if (!reason) return '';
-    if ((KNOWN_REASONS as readonly string[]).includes(reason)) {
-      return t(`reasons.${reason}`);
-    }
-    if (reason.startsWith('missing_variable:')) {
-      return t('reasons.missing_variable', {
-        slot: reason.slice('missing_variable:'.length),
-      });
-    }
-    return reason;
   }
 
   if (loading) {
@@ -635,7 +615,7 @@ export function ShopifySettings() {
                         </p>
                         {n.reason && (
                           <p className="text-muted-foreground mt-0.5 text-xs break-words">
-                            {reasonText(n.reason)}
+                            {shopifyReasonText(t, n.reason)}
                           </p>
                         )}
                       </div>
@@ -655,6 +635,9 @@ export function ShopifySettings() {
           </CardContent>
         </Card>
       </div>
+
+      {/* ---- Webhook log ----------------------------------------- */}
+      {config && canEditSettings && <ShopifyWebhookLog />}
 
       {editing && (
         <ShopifyEventDialog

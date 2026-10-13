@@ -194,6 +194,68 @@ describe('processShopifyWebhook — orders', () => {
   });
 });
 
+describe('processShopifyWebhook — result for the webhook log', () => {
+  it('reports each update and what happened to it', async () => {
+    mocks.notify.mockResolvedValue({ status: 'skipped', reason: 'no_phone' });
+    const result = await processShopifyWebhook(
+      fakeDb(freshState()),
+      CONFIG,
+      'orders/create',
+      ORDER,
+      null
+    );
+    expect(result).toEqual({
+      orderRef: '#1042',
+      outcomes: [{ event: 'order_created', status: 'skipped', reason: 'no_phone' }],
+    });
+  });
+
+  it('explains deliveries that produce no update', async () => {
+    expect(
+      await processShopifyWebhook(
+        fakeDb(freshState()),
+        CONFIG,
+        'orders/create',
+        { ...ORDER, cancelled_at: '2026-10-12T11:00:00+05:30' },
+        null
+      )
+    ).toEqual({ orderRef: '#1042', note: 'order_already_cancelled', outcomes: [] });
+
+    expect(
+      await processShopifyWebhook(fakeDb(freshState()), CONFIG, 'orders/create', {}, null)
+    ).toEqual({ orderRef: null, note: 'missing_id', outcomes: [] });
+
+    expect(
+      await processShopifyWebhook(fakeDb(freshState()), CONFIG, 'orders/create', 'x', null)
+    ).toEqual({ orderRef: null, note: 'invalid_payload', outcomes: [] });
+
+    const fulfillment = { id: 1, order_id: 2, name: '#1042.1', tracking_number: 'EX1' };
+    expect(
+      await processShopifyWebhook(
+        fakeDb(freshState({ rpcResult: { ...NEW, applied: false, was_new: false } })),
+        CONFIG,
+        'fulfillments/update',
+        fulfillment,
+        null
+      )
+    ).toEqual({ orderRef: '#1042.1', note: 'stale_update', outcomes: [] });
+
+    expect(
+      await processShopifyWebhook(
+        fakeDb(
+          freshState({
+            rpcResult: { ...NEW, was_new: false, prev_tracking_number: 'EX1' },
+          })
+        ),
+        CONFIG,
+        'fulfillments/update',
+        fulfillment,
+        null
+      )
+    ).toEqual({ orderRef: '#1042.1', note: 'no_change', outcomes: [] });
+  });
+});
+
 describe('processShopifyWebhook — fulfillments', () => {
   const FULFILLMENT = {
     id: 255858046,

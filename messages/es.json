@@ -1794,6 +1794,46 @@
       "networkError": "No se pudo conectar con el servidor"
     },
     "shopify": {
+      "webhookLogTitle": "Registro de webhooks",
+      "webhookLogDesc": "Todas las entregas que Shopify hizo a este espacio de trabajo en los últimos 30 días y qué pasó con cada una.",
+      "webhookLogEmpty": "Aún no se ha recibido ningún webhook.",
+      "webhookLogLoadFailed": "No se pudo cargar el registro de webhooks",
+      "colTime": "Recibido",
+      "colTopic": "Tema",
+      "colOrder": "Pedido",
+      "colStatus": "Estado",
+      "colResult": "Resultado",
+      "view": "Ver",
+      "webhookIdLabel": "ID del webhook de Shopify",
+      "payloadNone": "No se guardó ningún contenido para esta entrega.",
+      "webhookStatus": {
+        "received": "Recibido",
+        "processed": "Procesado",
+        "ignored": "Ignorado",
+        "rejected": "Rechazado",
+        "error": "Error"
+      },
+      "outcomeStatus": {
+        "sent": "Enviada",
+        "skipped": "Omitida",
+        "failed": "Fallida",
+        "duplicate": "Ya gestionada",
+        "disabled": "Desactivada"
+      },
+      "webhookDetail": {
+        "invalid_signature": "La firma no coincide con el secreto de firma guardado",
+        "invalid_json": "El cuerpo no era un JSON válido",
+        "connection_paused": "La conexión está en pausa",
+        "unsupported_topic": "Este tema de webhook no se usa",
+        "invalid_payload": "El contenido no era un pedido ni una preparación",
+        "missing_id": "El contenido no tenía ID",
+        "db_error": "Un error de base de datos detuvo el procesamiento",
+        "order_already_cancelled": "El pedido ya estaba cancelado al llegar, así que no se envía el mensaje de pedido creado",
+        "stale_update": "Una actualización más antigua que otra ya procesada",
+        "no_change": "No cambió nada de lo que se informa a los clientes",
+        "order_cancelled": "El pedido está cancelado, así que no se envían actualizaciones de envío",
+        "payload_too_large_to_store": "El contenido era demasiado grande para guardarlo"
+      },
       "productImagesTitle": "Imágenes de producto",
       "productImagesDesc": "Muestra el producto pedido en una plantilla con encabezado de imagen. Crea una app en el Dev Dashboard de Shopify con el ámbito de acceso read_products, instálala en tu tienda y pega sus credenciales aquí.",
       "apiConnected": "Conectado",
@@ -1927,6 +1967,7 @@
         "unknown": "Sin confirmar"
       },
       "reasons": {
+        "db_error": "Un error de base de datos detuvo el envío",
         "no_phone": "El pedido no tiene un número de teléfono utilizable",
         "template_not_found": "La plantilla ya no existe en este espacio de trabajo",
         "template_not_approved": "La plantilla no está aprobada por Meta",

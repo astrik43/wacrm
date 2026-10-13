@@ -1812,6 +1812,46 @@
       "networkError": "서버에 연결할 수 없습니다"
     },
     "shopify": {
+      "webhookLogTitle": "웹훅 로그",
+      "webhookLogDesc": "지난 30일 동안 Shopify가 이 워크스페이스로 보낸 모든 전송과 처리 결과입니다.",
+      "webhookLogEmpty": "아직 수신된 웹훅이 없습니다.",
+      "webhookLogLoadFailed": "웹훅 로그를 불러오지 못했습니다",
+      "colTime": "수신 시각",
+      "colTopic": "토픽",
+      "colOrder": "주문",
+      "colStatus": "상태",
+      "colResult": "결과",
+      "view": "보기",
+      "webhookIdLabel": "Shopify 웹훅 ID",
+      "payloadNone": "이 전송에는 저장된 페이로드가 없습니다.",
+      "webhookStatus": {
+        "received": "수신됨",
+        "processed": "처리됨",
+        "ignored": "무시됨",
+        "rejected": "거부됨",
+        "error": "오류"
+      },
+      "outcomeStatus": {
+        "sent": "전송됨",
+        "skipped": "건너뜀",
+        "failed": "실패",
+        "duplicate": "이미 처리됨",
+        "disabled": "꺼져 있음"
+      },
+      "webhookDetail": {
+        "invalid_signature": "서명이 저장된 서명 시크릿과 일치하지 않습니다",
+        "invalid_json": "본문이 올바른 JSON이 아닙니다",
+        "connection_paused": "연결이 일시 중지되었습니다",
+        "unsupported_topic": "사용하지 않는 웹훅 토픽입니다",
+        "invalid_payload": "페이로드가 주문 또는 주문 처리가 아닙니다",
+        "missing_id": "페이로드에 ID가 없습니다",
+        "db_error": "데이터베이스 오류로 처리가 중단되었습니다",
+        "order_already_cancelled": "주문이 도착했을 때 이미 취소되어 있어 주문 생성 메시지를 보내지 않습니다",
+        "stale_update": "이미 처리된 것보다 오래된 업데이트입니다",
+        "no_change": "고객에게 알릴 변경 사항이 없습니다",
+        "order_cancelled": "주문이 취소되어 배송 알림을 보내지 않습니다",
+        "payload_too_large_to_store": "페이로드가 너무 커서 저장하지 않았습니다"
+      },
       "productImagesTitle": "상품 이미지",
       "productImagesDesc": "이미지 헤더가 있는 템플릿에 주문한 상품을 표시합니다. Shopify Dev Dashboard에서 read_products 액세스 범위로 앱을 만들고 스토어에 설치한 다음 자격 증명을 여기에 붙여넣으세요.",
       "apiConnected": "연결됨",
@@ -1945,6 +1985,7 @@
         "unknown": "확인되지 않음"
       },
       "reasons": {
+        "db_error": "데이터베이스 오류로 전송이 중단되었습니다",
         "no_phone": "주문에 사용할 수 있는 전화번호가 없습니다",
         "template_not_found": "이 워크스페이스에 템플릿이 더 이상 없습니다",
         "template_not_approved": "템플릿이 Meta의 승인을 받지 않았습니다",
