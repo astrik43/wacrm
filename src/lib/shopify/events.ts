@@ -1,8 +1,8 @@
 // ============================================================
 // Shopify → wacrm event model.
 //
-// Shopify tells us WHAT changed in coarse terms (four webhook
-// topics); the six customer-facing events are derived here. Pure and
+// Shopify tells us WHAT changed in coarse terms (six webhook
+// topics); the customer-facing events are derived here. Pure and
 // dependency-free so the settings UI can import the catalogue too.
 // ============================================================
 
@@ -13,6 +13,9 @@ export const SHOPIFY_EVENTS = [
   'out_for_delivery',
   'delivered',
   'order_cancelled',
+  'cart_reminder_1',
+  'cart_reminder_2',
+  'cart_reminder_3',
 ] as const;
 
 export type ShopifyEvent = (typeof SHOPIFY_EVENTS)[number];
@@ -30,6 +33,8 @@ export const SHOPIFY_TOPICS = [
   'orders/cancelled',
   'fulfillments/create',
   'fulfillments/update',
+  'checkouts/create',
+  'checkouts/update',
 ] as const;
 
 export type ShopifyTopic = (typeof SHOPIFY_TOPICS)[number];
@@ -48,6 +53,55 @@ export const FULFILLMENT_EVENTS: readonly ShopifyEvent[] = [
   'out_for_delivery',
   'delivered',
 ];
+
+/** Reminders about a checkout the customer started and didn't finish. */
+export const CART_EVENTS: readonly ShopifyEvent[] = [
+  'cart_reminder_1',
+  'cart_reminder_2',
+  'cart_reminder_3',
+];
+
+/** Everything that is about a placed order (and its shipments). */
+export const ORDER_EVENTS: readonly ShopifyEvent[] = SHOPIFY_EVENTS.filter(
+  (event) => !CART_EVENTS.includes(event)
+);
+
+export function isCartEvent(event: ShopifyEvent): boolean {
+  return CART_EVENTS.includes(event);
+}
+
+/**
+ * Which template an event uses can depend on how the order is paid.
+ * 'all' is the fallback when the order's own variant isn't set up.
+ */
+export const SHOPIFY_VARIANTS = ['all', 'cod', 'prepaid'] as const;
+
+export type ShopifyVariant = (typeof SHOPIFY_VARIANTS)[number];
+export type PaymentMode = Exclude<ShopifyVariant, 'all'>;
+
+export function isShopifyVariant(value: unknown): value is ShopifyVariant {
+  return (
+    typeof value === 'string' &&
+    (SHOPIFY_VARIANTS as readonly string[]).includes(value)
+  );
+}
+
+export function isPaymentMode(value: unknown): value is PaymentMode {
+  return value === 'cod' || value === 'prepaid';
+}
+
+/** A cart can't be paid for yet, so its reminders have one template. */
+export function variantsForEvent(event: ShopifyEvent): readonly ShopifyVariant[] {
+  return isCartEvent(event) ? ['all'] : SHOPIFY_VARIANTS;
+}
+
+/** Longest delay the schedule accepts (30 days). */
+export const MAX_DELAY_MINUTES = 43200;
+/**
+ * A reminder sent the moment a checkout appears would reach someone
+ * who is still typing their address.
+ */
+export const MIN_CART_DELAY_MINUTES = 10;
 
 export interface FulfillmentState {
   trackingNumber: string | null;

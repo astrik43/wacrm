@@ -1794,6 +1794,32 @@
       "networkError": "Não foi possível conectar ao servidor"
     },
     "shopify": {
+      "variantLabel": "Aplica-se a",
+      "variantHint": "Um modelo de COD ou pré-pago é usado nesses pedidos quando está ativado. Caso contrário, usa-se o modelo de “Todos os pedidos”.",
+      "variants": {
+        "all": "Todos os pedidos",
+        "cod": "Pedidos COD",
+        "prepaid": "Pedidos pré-pagos"
+      },
+      "delayLabel": "Aguardar antes de enviar",
+      "delayUnits": {
+        "minutes": "Minutos",
+        "hours": "Horas",
+        "days": "Dias"
+      },
+      "delayHint": "0 envia a mensagem assim que a Shopify informa a alteração.",
+      "delayHintCart": "Contado a partir do momento em que o telefone do cliente aparece no checkout. No mínimo {min} minutos.",
+      "delayTooLong": "O atraso pode ser de no máximo 30 dias",
+      "cartDelayTooShort": "Um lembrete de carrinho precisa de um atraso de pelo menos {min} minutos",
+      "delayMinutes": "após {count} min",
+      "delayHours": "após {count} h",
+      "delayDays": "após {count} d",
+      "cartTitle": "Lembretes de carrinho",
+      "cartDesc": "Lembre os clientes que iniciaram um checkout e não fizeram o pedido. Os lembretes pendentes são cancelados quando o cliente faz o pedido.",
+      "tagOrdersOn": "A marcação de pedidos está disponível, então a página de confirmação de COD pode marcar pedidos.",
+      "tagOrdersOff": "O app não tem o escopo de acesso write_orders, então a página de confirmação de COD não pode marcar pedidos. Adicione-o, lance uma nova versão e aprove-a na loja.",
+      "overdueWarning": "{count} mensagens agendadas estão mais de 10 minutos atrasadas. Verifique se um agendador está chamando /api/shopify/cron.",
+      "sendsAt": "Envia em {date}",
       "webhookLogTitle": "Registro de webhooks",
       "webhookLogDesc": "Todas as entregas que a Shopify fez a este workspace nos últimos 30 dias e o que aconteceu com cada uma.",
       "webhookLogEmpty": "Nenhum webhook recebido ainda.",
@@ -1814,6 +1840,7 @@
         "error": "Erro"
       },
       "outcomeStatus": {
+        "scheduled": "Agendada",
         "sent": "Enviada",
         "skipped": "Ignorada",
         "failed": "Falhou",
@@ -1821,6 +1848,8 @@
         "disabled": "Desativada"
       },
       "webhookDetail": {
+        "checkout_completed": "O checkout foi concluído, então nenhum lembrete é enviado",
+        "no_phone": "O checkout ainda não tem um telefone utilizável",
         "invalid_signature": "A assinatura não corresponde ao segredo de assinatura salvo",
         "invalid_json": "O corpo não era um JSON válido",
         "connection_paused": "A conexão está pausada",
@@ -1834,8 +1863,8 @@
         "order_cancelled": "O pedido está cancelado, então as atualizações de remessa não são enviadas",
         "payload_too_large_to_store": "O payload era grande demais para armazenar"
       },
-      "productImagesTitle": "Imagens de produto",
-      "productImagesDesc": "Mostre o produto pedido em um modelo com cabeçalho de imagem. Crie um app no Dev Dashboard da Shopify com o escopo de acesso read_products, instale-o na sua loja e cole as credenciais aqui.",
+      "productImagesTitle": "App da Shopify",
+      "productImagesDesc": "Necessário para mostrar o produto pedido em um cabeçalho de imagem e para marcar pedidos na página de confirmação de COD. Crie um app no Shopify Dev Dashboard com os escopos de acesso read_products e write_orders, instale-o na sua loja e cole as credenciais aqui.",
       "apiConnected": "Conectado",
       "apiNotConnected": "Não configurado",
       "clientIdLabel": "ID do cliente",
@@ -1845,13 +1874,13 @@
       "apiSave": "Salvar e verificar",
       "apiSaved": "A Shopify aceitou as credenciais",
       "apiRemove": "Remover credenciais",
-      "apiRemoved": "Imagens de produto desativadas",
+      "apiRemoved": "Credenciais do app da Shopify removidas",
       "apiRequired": "Informe o ID do cliente e o segredo do cliente",
       "headerImageLabel": "Imagem do cabeçalho",
       "headerImageTemplate": "Imagem salva com o modelo",
       "headerImageProduct": "Imagem do produto (primeiro item do pedido)",
       "headerImageHint": "Se o produto não tiver imagem, a imagem salva com o modelo é usada.",
-      "headerImageNeedsApi": "Adicione as credenciais do app da Shopify em Imagens de produto; caso contrário, a imagem salva com o modelo é usada.",
+      "headerImageNeedsApi": "Adicione as credenciais em App da Shopify; caso contrário, é usada a imagem salva com o modelo.",
       "title": "Atualizações de pedidos da Shopify",
       "description": "Envie aos clientes um modelo do WhatsApp quando o pedido da Shopify for feito, enviado, sair para entrega, for entregue ou cancelado.",
       "loadFailed": "Falha ao carregar as configurações da Shopify",
@@ -1872,6 +1901,8 @@
       "webhookUrlLabel": "URL do webhook",
       "webhookUrlHint": "No admin da Shopify, abra Configurações → Notificações → Webhooks e crie um webhook (formato JSON) para esta URL para cada um destes eventos:",
       "topics": {
+        "checkouts_create": "Criação de checkout",
+        "checkouts_update": "Atualização de checkout",
         "orders_create": "Criação de pedido",
         "orders_cancelled": "Cancelamento de pedido",
         "fulfillments_create": "Criação de processamento",
@@ -1893,8 +1924,20 @@
       "disconnectConfirm": "Confirmar desconexão",
       "disconnected": "Shopify desconectada",
       "eventsTitle": "Atualizações de pedido",
-      "eventsDesc": "Ative as atualizações que deseja e escolha um modelo aprovado para cada uma.",
+      "eventsDesc": "Ative as atualizações que quiser e escolha um modelo aprovado para cada uma. Abra uma atualização para adicionar um modelo separado para pedidos COD ou pré-pagos, ou um atraso.",
       "events": {
+        "cart_reminder_1": {
+          "label": "Lembrete de carrinho 1",
+          "desc": "Primeiro lembrete depois que um checkout é iniciado e não concluído."
+        },
+        "cart_reminder_2": {
+          "label": "Lembrete de carrinho 2",
+          "desc": "Segundo lembrete, se o cliente ainda não fez o pedido."
+        },
+        "cart_reminder_3": {
+          "label": "Lembrete de carrinho 3",
+          "desc": "Último lembrete, se o cliente ainda não fez o pedido."
+        },
         "order_created": {
           "label": "Pedido criado",
           "desc": "Enviada uma vez quando um novo pedido é feito."
@@ -1938,6 +1981,11 @@
       "staticPlaceholder": "Texto a inserir",
       "fallbackPlaceholder": "Alternativa se vazio (opcional)",
       "fields": {
+        "payment_mode": "Forma de pagamento",
+        "cod_confirm_token": "Página de confirmação de COD (sufixo do botão)",
+        "cod_confirm_url": "Link da página de confirmação de COD",
+        "checkout_url": "Link de recuperação do checkout",
+        "checkout_url_path": "Link de recuperação do checkout (sufixo do botão)",
         "customer_first_name": "Primeiro nome do cliente",
         "customer_name": "Nome completo do cliente",
         "order_number": "Número do pedido",
@@ -1956,10 +2004,12 @@
       "preview": "Prévia com valores de exemplo",
       "enableLabel": "Enviar esta atualização",
       "activityTitle": "Atividade",
-      "activityDesc": "As atualizações de pedido mais recentes e o que aconteceu com cada uma.",
+      "activityDesc": "As atualizações mais recentes e o que aconteceu com cada uma.",
       "noActivity": "Nada ainda. As atualizações aparecem aqui quando a Shopify enviar um evento.",
       "refresh": "Atualizar",
       "status": {
+        "scheduled": "Agendada",
+        "cancelled": "Cancelada",
         "sent": "Enviada",
         "skipped": "Ignorada",
         "failed": "Falhou",
@@ -1967,6 +2017,10 @@
         "unknown": "Não confirmada"
       },
       "reasons": {
+        "order_cancelled": "O pedido foi cancelado antes do horário de envio",
+        "order_placed": "O cliente fez um pedido",
+        "checkout_completed": "O checkout foi concluído",
+        "event_disabled": "A atualização foi desativada antes do horário de envio",
         "db_error": "Um erro de banco de dados interrompeu o envio",
         "no_phone": "O pedido não tem um número de telefone utilizável",
         "template_not_found": "O modelo não existe mais neste workspace",
@@ -2091,6 +2145,20 @@
     "emailPlaceholder": "you@example.com",
     "sending": "Enviando...",
     "sendLink": "Enviar link de redefinição"
+  },
+  "OrderConfirm": {
+    "title": "Pedido {order}",
+    "titleNoNumber": "Seu pedido",
+    "greeting": "Olá, {name}",
+    "items": "Itens",
+    "total": "Total",
+    "payment": "Pagamento",
+    "prompt": "Confirme que você quer receber este pedido.",
+    "confirm": "Confirmar pedido",
+    "cancel": "Cancelar pedido",
+    "confirmed": "Obrigado. Seu pedido está confirmado.",
+    "cancelRequested": "Recebemos seu pedido de cancelamento.",
+    "alreadyCancelled": "Este pedido foi cancelado."
   },
   "JoinPage": {
     "fail": {

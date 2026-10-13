@@ -1,11 +1,14 @@
 // ============================================================
-// Shopify Admin API client (server-only) — product image lookup.
+// Shopify Admin API client (server-only) — product image lookup and
+// order tags.
 //
 // Order webhooks name the product but carry no picture. When the
 // merchant has pasted the credentials of a Dev Dashboard app, we
 // exchange them for a 24-hour access token (client-credentials
 // grant), cache the token encrypted on the config row, and ask the
-// Admin GraphQL API for the first line item's image.
+// Admin GraphQL API for the first line item's image. The same token
+// tags an order when the customer answers on the COD confirmation
+// page (needs the app's `write_orders` scope).
 //
 // Everything here is best-effort from the webhook's point of view:
 // `fetchLineItemImage` never throws, because a missing picture must
@@ -143,6 +146,11 @@ export function canReadProducts(scopes: string[]): boolean {
   return scopes.includes('read_products') || scopes.includes('write_products');
 }
 
+/** Adding a tag to an order is an order write. */
+export function canWriteOrders(scopes: string[]): boolean {
+  return scopes.includes('write_orders');
+}
+
 export function hasApiCredentials(config: ShopifyConfigRow): boolean {
   return Boolean(
     config.api_client_id &&
@@ -183,6 +191,7 @@ export async function getShopifyAccessToken(
       .update({
         api_access_token: encrypt(issued.token),
         api_token_expires_at: issued.expiresAt,
+        api_scopes: issued.scopes.join(','),
       })
       .eq('id', config.id);
     if (error) {
@@ -293,5 +302,96 @@ export async function fetchLineItemImage(
       err instanceof Error ? err.message : err
     );
     return null;
+  }
+}
+
+const TAGS_ADD = `mutation AddOrderTags($id: ID!, $tags: [String!]!) {
+  tagsAdd(id: $id, tags: $tags) { userErrors { message } }
+}`;
+
+async function mutateTags(
+  shopDomain: string,
+  token: string,
+  orderId: string,
+  tags: string[]
+): Promise<{ status: number; error: string | null }> {
+  const response = await fetch(
+    `https://${shopDomain}/admin/api/${API_VERSION}/graphql.json`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Shopify-Access-Token': token,
+      },
+      body: JSON.stringify({
+        query: TAGS_ADD,
+        variables: { id: `gid://shopify/Order/${orderId}`, tags },
+      }),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    }
+  );
+  if (!response.ok) {
+    return { status: response.status, error: `shopify_http_${response.status}` };
+  }
+
+  const body = (await response.json()) as {
+    errors?: { message?: unknown; extensions?: { code?: unknown } }[];
+    data?: { tagsAdd?: { userErrors?: { message?: unknown }[] } | null };
+  };
+  const top = body.errors?.[0];
+  if (top) {
+    // What Shopify answers when the app was never given write_orders.
+    if (top.extensions?.code === 'ACCESS_DENIED') {
+      return { status: 200, error: 'missing_write_orders_scope' };
+    }
+    return {
+      status: 200,
+      error: typeof top.message === 'string' ? top.message : 'shopify_error',
+    };
+  }
+  const userError = body.data?.tagsAdd?.userErrors?.[0]?.message;
+  if (typeof userError === 'string' && userError) {
+    return { status: 200, error: userError };
+  }
+  return { status: 200, error: null };
+}
+
+export type AddTagsResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * Add tags to a Shopify order (existing tags are kept; adding one
+ * twice is a no-op). Needs the app's `write_orders` scope. Never
+ * throws — the caller records the error and retries later.
+ */
+export async function addOrderTags(
+  db: SupabaseClient,
+  config: ShopifyConfigRow,
+  orderId: string,
+  tags: string[]
+): Promise<AddTagsResult> {
+  if (!/^\d+$/.test(orderId)) return { ok: false, error: 'invalid_order_id' };
+  if (!hasApiCredentials(config)) return { ok: false, error: 'no_app_credentials' };
+
+  try {
+    let token = await getShopifyAccessToken(db, config);
+    if (!token) return { ok: false, error: 'no_access_token' };
+
+    let result = await mutateTags(config.shop_domain!, token, orderId, tags);
+    // 401: the cached token was revoked. Access denied: it may simply
+    // predate the merchant adding write_orders — a token keeps the
+    // scopes it was issued with for its whole 24 hours.
+    if (result.status === 401 || result.error === 'missing_write_orders_scope') {
+      token = await getShopifyAccessToken(db, config, { forceRefresh: true });
+      if (!token) return { ok: false, error: 'no_access_token' };
+      result = await mutateTags(config.shop_domain!, token, orderId, tags);
+    }
+    return result.error
+      ? { ok: false, error: result.error.slice(0, 300) }
+      : { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: (err instanceof Error ? err.message : 'unknown_error').slice(0, 300),
+    };
   }
 }

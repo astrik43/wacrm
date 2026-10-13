@@ -46,6 +46,8 @@ const TEMPLATE = {
 };
 
 const EVENT_ROW = {
+  variant: 'all',
+  delay_minutes: 0,
   is_enabled: true,
   template_name: 'order_confirmed',
   template_language: 'en',
@@ -58,6 +60,7 @@ const EVENT_ROW = {
 };
 
 interface FakeState {
+  /** One row, several (per payment variant), or null for none. */
   eventRow: unknown;
   /** Rows the claim upsert returns; [] simulates a duplicate. */
   claimRows: { id: string }[];
@@ -73,10 +76,7 @@ function fakeDb(state: FakeState): SupabaseClient {
       const builder: Record<string, unknown> = {
         select: () => builder,
         eq: () => builder,
-        maybeSingle: async () => ({
-          data: table === 'shopify_event_templates' ? state.eventRow : null,
-          error: null,
-        }),
+        maybeSingle: async () => ({ data: null, error: null }),
         upsert: (row: Record<string, unknown>) => {
           state.claims.push(row);
           return { select: async () => ({ data: state.claimRows, error: null }) };
@@ -87,8 +87,14 @@ function fakeDb(state: FakeState): SupabaseClient {
           if (table === 'shopify_orders') state.orderUpdates.push(patch);
           return builder;
         },
-        then: (resolve: (r: { data: null; error: null }) => unknown) =>
-          resolve({ data: null, error: null }),
+        then: (resolve: (r: { data: unknown; error: null }) => unknown) =>
+          resolve({
+            data:
+              table === 'shopify_event_templates'
+                ? ([] as unknown[]).concat(state.eventRow ?? [])
+                : null,
+            error: null,
+          }),
       };
       return builder;
     },
@@ -181,7 +187,12 @@ describe('notifyShopifyEvent', () => {
       { senderType: 'bot', pauseActiveFlows: false }
     );
     expect(state.ledgerUpdates).toEqual([
-      { status: 'sent', message_id: 'msg-1', whatsapp_message_id: 'wamid.1' },
+      {
+        status: 'sent',
+        message_id: 'msg-1',
+        whatsapp_message_id: 'wamid.1',
+        payload: null,
+      },
     ]);
     expect(state.orderUpdates).toEqual([{ contact_id: 'ct-1' }]);
   });
@@ -214,7 +225,7 @@ describe('notifyShopifyEvent', () => {
     });
     expect(outcome).toEqual({ status: 'skipped', reason: 'no_phone' });
     expect(state.ledgerUpdates).toEqual([
-      { status: 'skipped', reason: 'no_phone' },
+      { status: 'skipped', reason: 'no_phone', payload: null },
     ]);
     expect(mocks.sendMessageToConversation).not.toHaveBeenCalled();
   });
@@ -263,7 +274,114 @@ describe('notifyShopifyEvent', () => {
       reason: 'meta_error: Recipient not on WhatsApp',
     });
     expect(state.ledgerUpdates).toEqual([
-      { status: 'failed', reason: 'meta_error: Recipient not on WhatsApp' },
+      {
+        status: 'failed',
+        reason: 'meta_error: Recipient not on WhatsApp',
+        payload: null,
+      },
     ]);
+  });
+});
+
+describe('notifyShopifyEvent — COD and prepaid templates', () => {
+  const COD_ROW = { ...EVENT_ROW, variant: 'cod', template_name: 'cod_confirm' };
+
+  it("uses the payment mode's own template when it is switched on", async () => {
+    const state = freshState({ eventRow: [EVENT_ROW, COD_ROW] });
+    await notifyShopifyEvent(fakeDb(state), 'acct-1', {
+      ...INPUT,
+      paymentMode: 'cod',
+    });
+    expect(mocks.resolveTemplateRow).toHaveBeenCalledWith(
+      expect.anything(),
+      'acct-1',
+      'cod_confirm',
+      'en'
+    );
+    expect(state.claims[0]).toMatchObject({ variant: 'cod' });
+  });
+
+  it('falls back to the all-orders template', async () => {
+    for (const eventRow of [
+      [EVENT_ROW, { ...COD_ROW, is_enabled: false }],
+      [EVENT_ROW],
+    ]) {
+      mocks.resolveTemplateRow.mockClear();
+      const state = freshState({ eventRow });
+      await notifyShopifyEvent(fakeDb(state), 'acct-1', {
+        ...INPUT,
+        paymentMode: 'cod',
+      });
+      expect(mocks.resolveTemplateRow).toHaveBeenCalledWith(
+        expect.anything(),
+        'acct-1',
+        'order_confirmed',
+        'en'
+      );
+      expect(state.claims[0]).toMatchObject({ variant: 'all' });
+    }
+  });
+
+  it('sends nothing to a prepaid order when only COD is set up', async () => {
+    const state = freshState({ eventRow: [COD_ROW] });
+    const outcome = await notifyShopifyEvent(fakeDb(state), 'acct-1', {
+      ...INPUT,
+      paymentMode: 'prepaid',
+    });
+    expect(outcome).toEqual({ status: 'disabled' });
+    expect(state.claims).toEqual([]);
+  });
+});
+
+describe('notifyShopifyEvent — delay', () => {
+  it('parks a delayed update with what is needed to send it later', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-13T10:00:00.000Z'));
+    try {
+      const state = freshState({ eventRow: { ...EVENT_ROW, delay_minutes: 30 } });
+      const outcome = await notifyShopifyEvent(fakeDb(state), 'acct-1', {
+        ...INPUT,
+        paymentMode: 'cod',
+      });
+
+      expect(outcome).toEqual({
+        status: 'scheduled',
+        sendAt: '2026-10-13T10:30:00.000Z',
+      });
+      expect(state.claims[0]).toMatchObject({
+        status: 'scheduled',
+        send_at: '2026-10-13T10:30:00.000Z',
+        payload: {
+          phone: '919876543210',
+          customerName: 'Priya Nair',
+          fields: INPUT.fields,
+          paymentMode: 'cod',
+        },
+      });
+      expect(mocks.sendMessageToConversation).not.toHaveBeenCalled();
+      expect(state.ledgerUpdates).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not wait when there is nobody to send to', async () => {
+    const state = freshState({ eventRow: { ...EVENT_ROW, delay_minutes: 30 } });
+    const outcome = await notifyShopifyEvent(fakeDb(state), 'acct-1', {
+      ...INPUT,
+      phone: null,
+    });
+    expect(outcome).toEqual({ status: 'skipped', reason: 'no_phone' });
+    expect(state.claims[0]).toMatchObject({ status: 'pending', send_at: null });
+  });
+
+  it('a duplicate of a delayed update schedules nothing', async () => {
+    const state = freshState({
+      eventRow: { ...EVENT_ROW, delay_minutes: 30 },
+      claimRows: [],
+    });
+    expect(await notifyShopifyEvent(fakeDb(state), 'acct-1', INPUT)).toEqual({
+      status: 'duplicate',
+    });
   });
 });

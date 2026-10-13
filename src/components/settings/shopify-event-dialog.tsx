@@ -1,10 +1,14 @@
 'use client';
 
 // ============================================================
-// ShopifyEventDialog — choose the template for one order update and
-// map each of its placeholders to an order detail (or fixed text).
+// ShopifyEventDialog — choose the template for one update and map
+// each of its placeholders to an order detail (or fixed text).
 // Validation here mirrors the server (`validateVariableMapping`), so
 // Save is only offered for a mapping the API will accept.
+//
+// An order or shipment update can have a different template for COD
+// and prepaid orders: "Applies to" switches between those variants,
+// each saved separately. Any variant can also wait before sending.
 // ============================================================
 
 import { useEffect, useMemo, useState } from 'react';
@@ -32,7 +36,14 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { createClient } from '@/lib/supabase/client';
-import type { ShopifyEvent } from '@/lib/shopify/events';
+import {
+  MAX_DELAY_MINUTES,
+  MIN_CART_DELAY_MINUTES,
+  isCartEvent,
+  variantsForEvent,
+  type ShopifyEvent,
+  type ShopifyVariant,
+} from '@/lib/shopify/events';
 import {
   SHOPIFY_FIELDS,
   fieldsForEvent,
@@ -49,10 +60,27 @@ import type { MessageTemplate } from '@/types';
 
 export interface ShopifyEventSetting {
   event: ShopifyEvent;
+  variant: ShopifyVariant;
+  /** 0 = send as soon as Shopify reports the change. */
+  delay_minutes: number;
   is_enabled: boolean;
   template_name: string | null;
   template_language: string | null;
   variable_mapping: ShopifyVariableMapping;
+}
+
+const DELAY_UNITS = { minutes: 1, hours: 60, days: 1440 } as const;
+type DelayUnit = keyof typeof DELAY_UNITS;
+
+/** The largest unit that expresses the delay as a whole number. */
+function splitDelay(minutes: number): { amount: string; unit: DelayUnit } {
+  if (minutes > 0 && minutes % 1440 === 0) {
+    return { amount: String(minutes / 1440), unit: 'days' };
+  }
+  if (minutes > 0 && minutes % 60 === 0) {
+    return { amount: String(minutes / 60), unit: 'hours' };
+  }
+  return { amount: String(minutes), unit: 'minutes' };
 }
 
 const STATIC = '__static__';
@@ -96,13 +124,15 @@ function sampleFor(source: VariableSource | undefined): string {
 }
 
 export function ShopifyEventDialog({
-  setting,
+  settings,
+  initialVariant,
   hasApiCredentials,
   onOpenChange,
   onSaved,
 }: {
-  /** The update being edited; `null` closes the dialog. */
-  setting: ShopifyEventSetting | null;
+  /** Every variant of the update being edited. */
+  settings: ShopifyEventSetting[];
+  initialVariant: ShopifyVariant;
   /** Whether the store can look product pictures up (Shopify app set). */
   hasApiCredentials: boolean;
   onOpenChange: (open: boolean) => void;
@@ -116,7 +146,13 @@ export function ShopifyEventDialog({
   const [mapping, setMapping] = useState<ShopifyVariableMapping>({ body: [] });
   const [enabled, setEnabled] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [variant, setVariant] = useState<ShopifyVariant>(initialVariant);
+  const [delayAmount, setDelayAmount] = useState('0');
+  const [delayUnit, setDelayUnit] = useState<DelayUnit>('minutes');
 
+  const setting = settings.find((s) => s.variant === variant) ?? null;
+
+  // Load the form from whichever variant is selected.
   useEffect(() => {
     if (!setting) return;
     setSelectedKey(
@@ -126,7 +162,12 @@ export function ShopifyEventDialog({
     );
     setMapping(setting.variable_mapping ?? { body: [] });
     setEnabled(setting.is_enabled);
+    const delay = splitDelay(setting.delay_minutes ?? 0);
+    setDelayAmount(delay.amount);
+    setDelayUnit(delay.unit);
+  }, [setting]);
 
+  useEffect(() => {
     let cancelled = false;
     (async () => {
       setLoading(true);
@@ -145,7 +186,7 @@ export function ShopifyEventDialog({
     return () => {
       cancelled = true;
     };
-  }, [setting]);
+  }, []);
 
   const template = useMemo(
     () =>
@@ -168,6 +209,10 @@ export function ShopifyEventDialog({
   if (!setting) return null;
   const event = setting.event;
   const fieldOptions = fieldsForEvent(event);
+  const variants = variantsForEvent(event);
+  const delayMinutes = Math.round(
+    (Number(delayAmount) || 0) * DELAY_UNITS[delayUnit]
+  );
 
   function slotLabel(slotId: string): string {
     if (slotId === 'header') return t('slotHeader', { val: '{{1}}' });
@@ -193,6 +238,14 @@ export function ShopifyEventDialog({
       toast.error(t('mappingIncomplete'));
       return;
     }
+    if (delayMinutes < 0 || delayMinutes > MAX_DELAY_MINUTES) {
+      toast.error(t('delayTooLong'));
+      return;
+    }
+    if (enabled && isCartEvent(event) && delayMinutes < MIN_CART_DELAY_MINUTES) {
+      toast.error(t('cartDelayTooShort', { min: MIN_CART_DELAY_MINUTES }));
+      return;
+    }
     setSaving(true);
     try {
       const res = await fetch('/api/shopify/events', {
@@ -200,6 +253,8 @@ export function ShopifyEventDialog({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           event,
+          variant,
+          delay_minutes: delayMinutes,
           is_enabled: enabled,
           template_name: template?.name ?? null,
           template_language: template?.language ?? null,
@@ -240,6 +295,31 @@ export function ShopifyEventDialog({
           </div>
         ) : (
           <div className="space-y-4">
+            {variants.length > 1 && (
+              <div className="space-y-1.5">
+                <Label className="text-muted-foreground">{t('variantLabel')}</Label>
+                <Select
+                  value={variant}
+                  onValueChange={(val) => {
+                    const next = variants.find((v) => v === val);
+                    if (next) setVariant(next);
+                  }}
+                >
+                  <SelectTrigger className="border-border bg-muted text-foreground w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="border-border bg-popover">
+                    {variants.map((v) => (
+                      <SelectItem key={v} value={v}>
+                        {t(`variants.${v}`)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-muted-foreground text-xs">{t('variantHint')}</p>
+              </div>
+            )}
+
             <div className="space-y-1.5">
               <Label className="text-muted-foreground">{t('templateLabel')}</Label>
               {templates.length === 0 ? (
@@ -398,6 +478,44 @@ export function ShopifyEventDialog({
                 </p>
               </div>
             )}
+
+            <div className="space-y-1.5">
+              <Label htmlFor="shopify-delay" className="text-muted-foreground">
+                {t('delayLabel')}
+              </Label>
+              <div className="grid grid-cols-2 gap-2">
+                <Input
+                  id="shopify-delay"
+                  inputMode="numeric"
+                  value={delayAmount}
+                  onChange={(e) =>
+                    setDelayAmount(e.target.value.replace(/[^\d]/g, ''))
+                  }
+                />
+                <Select
+                  value={delayUnit}
+                  onValueChange={(val) => {
+                    if (val === 'minutes' || val === 'hours' || val === 'days') {
+                      setDelayUnit(val);
+                    }
+                  }}
+                >
+                  <SelectTrigger className="border-border bg-muted text-foreground w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="border-border bg-popover">
+                    <SelectItem value="minutes">{t('delayUnits.minutes')}</SelectItem>
+                    <SelectItem value="hours">{t('delayUnits.hours')}</SelectItem>
+                    <SelectItem value="days">{t('delayUnits.days')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <p className="text-muted-foreground text-xs">
+                {isCartEvent(event)
+                  ? t('delayHintCart', { min: MIN_CART_DELAY_MINUTES })
+                  : t('delayHint')}
+              </p>
+            </div>
 
             <div className="flex items-center justify-between gap-3">
               <Label className="text-popover-foreground">{t('enableLabel')}</Label>

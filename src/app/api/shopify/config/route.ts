@@ -3,7 +3,7 @@
 //
 //   GET    — this account's Shopify connection (safe columns only).
 //   PUT    — connect, or update the secret / country code / pause /
-//            Shopify app credentials (for product images).
+//            Shopify app credentials (product images, order tags).
 //   DELETE — disconnect.
 //
 // Dashboard endpoints: cookie session, RLS client. Any member may see
@@ -34,6 +34,7 @@ import {
 } from '@/lib/rate-limit';
 import {
   canReadProducts,
+  canWriteOrders,
   isMyshopifyDomain,
   requestAccessToken,
   ShopifyApiError,
@@ -44,7 +45,7 @@ import { encrypt } from '@/lib/whatsapp/encryption';
 // `webhook_secret`, `api_client_secret` and `api_access_token` are
 // deliberately excluded — they never leave the server.
 const SAFE_COLUMNS =
-  'id, webhook_token, shop_domain, default_country_code, is_active, last_webhook_at, created_at, api_client_id';
+  'id, webhook_token, shop_domain, default_country_code, is_active, last_webhook_at, created_at, api_client_id, api_scopes';
 
 const MAX_SECRET_LEN = 256;
 
@@ -57,6 +58,7 @@ interface ConfigRow {
   last_webhook_at: string | null;
   created_at: string;
   api_client_id?: string | null;
+  api_scopes?: string | null;
 }
 
 function present(row: ConfigRow, includeWebhookPath: boolean) {
@@ -68,6 +70,12 @@ function present(row: ConfigRow, includeWebhookPath: boolean) {
     last_webhook_at: row.last_webhook_at,
     created_at: row.created_at,
     has_api_credentials: Boolean(row.api_client_id),
+    // null = not known yet (credentials saved before scopes were
+    // recorded); it fills in at the next token exchange.
+    can_tag_orders:
+      row.api_client_id && typeof row.api_scopes === 'string'
+        ? canWriteOrders(row.api_scopes.split(','))
+        : null,
     api_client_id: includeWebhookPath ? (row.api_client_id ?? null) : null,
     webhook_path: includeWebhookPath
       ? shopifyWebhookPath(row.webhook_token)
@@ -183,6 +191,7 @@ export async function PUT(request: Request) {
       patch.api_client_secret = null;
       patch.api_access_token = null;
       patch.api_token_expires_at = null;
+      patch.api_scopes = null;
     } else if (
       body?.api_client_id !== undefined ||
       body?.api_client_secret !== undefined
@@ -246,6 +255,7 @@ export async function PUT(request: Request) {
         patch.api_client_secret = encrypt(clientSecret);
         patch.api_access_token = encrypt(issued.token);
         patch.api_token_expires_at = issued.expiresAt;
+        patch.api_scopes = issued.scopes.join(',');
         patch.shop_domain = shopDomain;
       } catch (err) {
         if (err instanceof ShopifyApiError) {

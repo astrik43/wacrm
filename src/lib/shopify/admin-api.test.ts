@@ -7,7 +7,9 @@ vi.mock('@/lib/whatsapp/encryption', () => ({
 }));
 
 import {
+  addOrderTags,
   canReadProducts,
+  canWriteOrders,
   fetchLineItemImage,
   getShopifyAccessToken,
   isMyshopifyDomain,
@@ -42,6 +44,7 @@ function config(overrides: Partial<ShopifyConfigRow> = {}): ShopifyConfigRow {
     api_client_secret: 'enc:client-secret',
     api_access_token: 'enc:cached-token',
     api_token_expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+    api_scopes: 'read_products',
     ...overrides,
   };
 }
@@ -163,7 +166,10 @@ describe('getShopifyAccessToken', () => {
       config({ api_token_expires_at: new Date(Date.now() + 60_000).toISOString() })
     );
     expect(token).toBe('fresh-token');
-    expect(updates[0]).toMatchObject({ api_access_token: 'enc:fresh-token' });
+    expect(updates[0]).toMatchObject({
+      api_access_token: 'enc:fresh-token',
+      api_scopes: 'read_products,read_orders',
+    });
     expect(updates[0].api_token_expires_at).toEqual(expect.any(String));
   });
 
@@ -269,5 +275,87 @@ describe('fetchLineItemImage', () => {
     fetchMock.mockReset();
     fetchMock.mockResolvedValue(new Response('boom', { status: 500 }));
     expect(await fetchLineItemImage(db, config(), REF)).toBeNull();
+  });
+});
+
+describe('canWriteOrders', () => {
+  it('needs the write_orders scope', () => {
+    expect(canWriteOrders(['read_products', 'write_orders'])).toBe(true);
+    expect(canWriteOrders(['read_orders', 'read_products'])).toBe(false);
+  });
+});
+
+describe('addOrderTags', () => {
+  const OK = { data: { tagsAdd: { userErrors: [] } } };
+  const DENIED = {
+    errors: [{ message: 'Access denied', extensions: { code: 'ACCESS_DENIED' } }],
+  };
+
+  it('adds the tags to the order by its global id', async () => {
+    fetchMock.mockResolvedValue(json(OK));
+    expect(
+      await addOrderTags(db, config(), '18949134254390001', ['COD confirmed'])
+    ).toEqual({ ok: true });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://acme.myshopify.com/admin/api/2026-07/graphql.json');
+    expect(init.headers['X-Shopify-Access-Token']).toBe('cached-token');
+    const body = JSON.parse(init.body);
+    expect(body.query).toContain('tagsAdd');
+    expect(body.variables).toEqual({
+      id: 'gid://shopify/Order/18949134254390001',
+      tags: ['COD confirmed'],
+    });
+  });
+
+  it('gets a fresh token once when the cached one predates write_orders', async () => {
+    fetchMock
+      .mockResolvedValueOnce(json(DENIED))
+      .mockResolvedValueOnce(json(TOKEN_RESPONSE))
+      .mockResolvedValueOnce(json(OK));
+    expect(await addOrderTags(db, config(), '1', ['COD confirmed'])).toEqual({
+      ok: true,
+    });
+    expect(fetchMock.mock.calls[2][1].headers['X-Shopify-Access-Token']).toBe(
+      'fresh-token'
+    );
+  });
+
+  it('reports a missing scope, a Shopify error and an outage without throwing', async () => {
+    fetchMock
+      .mockResolvedValueOnce(json(DENIED))
+      .mockResolvedValueOnce(json(TOKEN_RESPONSE))
+      .mockResolvedValueOnce(json(DENIED));
+    expect(await addOrderTags(db, config(), '1', ['x'])).toEqual({
+      ok: false,
+      error: 'missing_write_orders_scope',
+    });
+
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue(
+      json({ data: { tagsAdd: { userErrors: [{ message: 'Order not found' }] } } })
+    );
+    expect(await addOrderTags(db, config(), '1', ['x'])).toEqual({
+      ok: false,
+      error: 'Order not found',
+    });
+
+    fetchMock.mockReset();
+    fetchMock.mockRejectedValue(new Error('timeout'));
+    expect(await addOrderTags(db, config(), '1', ['x'])).toEqual({
+      ok: false,
+      error: 'timeout',
+    });
+  });
+
+  it('never calls out for a bad order id or without credentials', async () => {
+    expect(await addOrderTags(db, config(), '1; drop', ['x'])).toEqual({
+      ok: false,
+      error: 'invalid_order_id',
+    });
+    expect(
+      await addOrderTags(db, config({ api_client_id: null }), '1', ['x'])
+    ).toEqual({ ok: false, error: 'no_app_credentials' });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

@@ -1812,6 +1812,32 @@
       "networkError": "Could not reach the server"
     },
     "shopify": {
+      "variantLabel": "Applies to",
+      "variantHint": "A COD or prepaid template is used for those orders when it is switched on. Otherwise the “All orders” template is used.",
+      "variants": {
+        "all": "All orders",
+        "cod": "COD orders",
+        "prepaid": "Prepaid orders"
+      },
+      "delayLabel": "Wait before sending",
+      "delayUnits": {
+        "minutes": "Minutes",
+        "hours": "Hours",
+        "days": "Days"
+      },
+      "delayHint": "0 sends the message as soon as Shopify reports the change.",
+      "delayHintCart": "Counted from when the customer's phone number first appears on the checkout. At least {min} minutes.",
+      "delayTooLong": "The delay can be at most 30 days",
+      "cartDelayTooShort": "A cart reminder needs a delay of at least {min} minutes",
+      "delayMinutes": "after {count} min",
+      "delayHours": "after {count} h",
+      "delayDays": "after {count} d",
+      "cartTitle": "Cart reminders",
+      "cartDesc": "Remind customers who started a checkout and did not order. Reminders still waiting are cancelled when the customer orders.",
+      "tagOrdersOn": "Order tagging is available, so the COD confirmation page can tag orders.",
+      "tagOrdersOff": "The app is missing the write_orders access scope, so the COD confirmation page cannot tag orders. Add it, release a new version and approve it on the store.",
+      "overdueWarning": "{count} scheduled messages are more than 10 minutes late. Check that a scheduler is calling /api/shopify/cron.",
+      "sendsAt": "Sends {date}",
       "webhookLogTitle": "Webhook log",
       "webhookLogDesc": "Every delivery Shopify made to this workspace in the last 30 days, and what happened to it.",
       "webhookLogEmpty": "No webhooks received yet.",
@@ -1832,6 +1858,7 @@
         "error": "Error"
       },
       "outcomeStatus": {
+        "scheduled": "Scheduled",
         "sent": "Sent",
         "skipped": "Skipped",
         "failed": "Failed",
@@ -1839,6 +1866,8 @@
         "disabled": "Switched off"
       },
       "webhookDetail": {
+        "checkout_completed": "The checkout was completed, so no reminders are sent",
+        "no_phone": "The checkout has no usable phone number yet",
         "invalid_signature": "Signature did not match the saved signing secret",
         "invalid_json": "The body was not valid JSON",
         "connection_paused": "The connection is paused",
@@ -1852,8 +1881,8 @@
         "order_cancelled": "The order is cancelled, so shipment updates are not sent",
         "payload_too_large_to_store": "The payload was too large to store"
       },
-      "productImagesTitle": "Product images",
-      "productImagesDesc": "Show the ordered product in a template with an image header. Create an app in the Shopify Dev Dashboard with the read_products access scope, install it on your store, and paste its credentials here.",
+      "productImagesTitle": "Shopify app",
+      "productImagesDesc": "Needed to show the ordered product in an image header and to tag orders from the COD confirmation page. Create an app in the Shopify Dev Dashboard with the read_products and write_orders access scopes, install it on your store, and paste its credentials here.",
       "apiConnected": "Connected",
       "apiNotConnected": "Not set up",
       "clientIdLabel": "Client ID",
@@ -1863,13 +1892,13 @@
       "apiSave": "Save and check",
       "apiSaved": "Shopify accepted the credentials",
       "apiRemove": "Remove credentials",
-      "apiRemoved": "Product images turned off",
+      "apiRemoved": "Shopify app credentials removed",
       "apiRequired": "Enter both the client ID and the client secret",
       "headerImageLabel": "Header image",
       "headerImageTemplate": "Image saved with the template",
       "headerImageProduct": "Product image (first item in the order)",
       "headerImageHint": "If a product has no image, the image saved with the template is used.",
-      "headerImageNeedsApi": "Add the Shopify app credentials under Product images, otherwise the image saved with the template is used.",
+      "headerImageNeedsApi": "Add the Shopify app credentials under Shopify app, otherwise the image saved with the template is used.",
       "title": "Shopify order updates",
       "description": "Send customers a WhatsApp template when their Shopify order is placed, shipped, out for delivery, delivered or cancelled.",
       "loadFailed": "Failed to load Shopify settings",
@@ -1890,6 +1919,8 @@
       "webhookUrlLabel": "Webhook URL",
       "webhookUrlHint": "In Shopify admin, open Settings → Notifications → Webhooks and create one webhook (format JSON) to this URL for each of these events:",
       "topics": {
+        "checkouts_create": "Checkout creation",
+        "checkouts_update": "Checkout update",
         "orders_create": "Order creation",
         "orders_cancelled": "Order cancellation",
         "fulfillments_create": "Fulfillment creation",
@@ -1911,8 +1942,20 @@
       "disconnectConfirm": "Confirm disconnect",
       "disconnected": "Shopify disconnected",
       "eventsTitle": "Order updates",
-      "eventsDesc": "Switch on the updates you want and choose an approved template for each.",
+      "eventsDesc": "Switch on the updates you want and choose an approved template for each. Open an update to add a separate template for COD or prepaid orders, or a delay.",
       "events": {
+        "cart_reminder_1": {
+          "label": "Cart reminder 1",
+          "desc": "First reminder after a checkout is started and not finished."
+        },
+        "cart_reminder_2": {
+          "label": "Cart reminder 2",
+          "desc": "Second reminder, if the customer still has not ordered."
+        },
+        "cart_reminder_3": {
+          "label": "Cart reminder 3",
+          "desc": "Last reminder, if the customer still has not ordered."
+        },
         "order_created": {
           "label": "Order created",
           "desc": "Sent once when a new order is placed."
@@ -1956,15 +1999,20 @@
       "staticPlaceholder": "Text to insert",
       "fallbackPlaceholder": "Fallback if empty (optional)",
       "fields": {
+        "payment_mode": "Payment mode",
+        "cod_confirm_token": "COD confirmation page (button suffix)",
+        "cod_confirm_url": "COD confirmation page link",
+        "checkout_url": "Checkout recovery link",
+        "checkout_url_path": "Checkout recovery link (button suffix)",
         "customer_first_name": "Customer first name",
         "customer_name": "Customer full name",
-        "order_number": "Order number",
+        "order_number": "Order name (e.g. #1042)",
         "order_total": "Order total",
         "currency": "Currency",
         "item_summary": "Item summary",
         "item_count": "Item count",
-        "order_status_url": "Order status link",
-        "order_status_url_path": "Order status link (button suffix)",
+        "order_status_url": "Order URL (order status page)",
+        "order_status_url_path": "Order URL (button suffix)",
         "tracking_number": "Tracking number",
         "tracking_company": "Courier",
         "tracking_url": "Tracking link",
@@ -1974,10 +2022,12 @@
       "preview": "Preview with sample values",
       "enableLabel": "Send this update",
       "activityTitle": "Activity",
-      "activityDesc": "The most recent order updates and what happened to each.",
+      "activityDesc": "The most recent updates and what happened to each.",
       "noActivity": "Nothing yet. Updates appear here once Shopify sends an event.",
       "refresh": "Refresh",
       "status": {
+        "scheduled": "Scheduled",
+        "cancelled": "Cancelled",
         "sent": "Sent",
         "skipped": "Skipped",
         "failed": "Failed",
@@ -1985,6 +2035,10 @@
         "unknown": "Not confirmed"
       },
       "reasons": {
+        "order_cancelled": "The order was cancelled before the send time",
+        "order_placed": "The customer placed an order",
+        "checkout_completed": "The checkout was completed",
+        "event_disabled": "The update was switched off before the send time",
         "db_error": "A database error stopped the send",
         "no_phone": "The order has no usable phone number",
         "template_not_found": "The template no longer exists in this workspace",
@@ -2109,6 +2163,20 @@
     "emailPlaceholder": "you@example.com",
     "sending": "Sending...",
     "sendLink": "Send reset link"
+  },
+  "OrderConfirm": {
+    "title": "Order {order}",
+    "titleNoNumber": "Your order",
+    "greeting": "Hi {name}",
+    "items": "Items",
+    "total": "Total",
+    "payment": "Payment",
+    "prompt": "Please confirm that you want this order delivered.",
+    "confirm": "Confirm order",
+    "cancel": "Cancel order",
+    "confirmed": "Thank you. Your order is confirmed.",
+    "cancelRequested": "We have received your cancellation request.",
+    "alreadyCancelled": "This order has been cancelled."
   },
   "JoinPage": {
     "fail": {

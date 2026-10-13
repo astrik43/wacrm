@@ -117,6 +117,38 @@ BEGIN
       'shopify_webhook_events is missing — migration 045 did not apply';
   END IF;
 
+  -- Delayed sends, COD / prepaid templates, cart reminders (046).
+  -- All read and written by name through untyped clients.
+  IF to_regclass('public.shopify_checkouts') IS NULL THEN
+    RAISE EXCEPTION
+      'shopify_checkouts is missing — migration 046 did not apply';
+  END IF;
+  IF (
+    SELECT COUNT(*) FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND (table_name, column_name) IN (
+        ('shopify_event_templates', 'variant'),
+        ('shopify_event_templates', 'delay_minutes'),
+        ('shopify_notifications', 'send_at'),
+        ('shopify_notifications', 'payload'),
+        ('shopify_notifications', 'shopify_checkout_id'),
+        ('shopify_orders', 'payment_mode'),
+        ('shopify_orders', 'confirm_token'),
+        ('shopify_orders', 'cod_decision'),
+        ('shopify_orders', 'cod_tag_synced_at'),
+        ('shopify_configs', 'api_scopes')
+      )
+  ) <> 10 THEN
+    RAISE EXCEPTION
+      'shopify delay / COD columns are missing — migration 046 did not apply';
+  END IF;
+  -- The settings upsert targets (account_id, event, variant); with only
+  -- the old two-column index PostgREST rejects every save.
+  IF to_regclass('public.shopify_event_templates_account_event_variant_key') IS NULL THEN
+    RAISE EXCEPTION
+      'shopify_event_templates variant index is missing — migration 046 did not apply';
+  END IF;
+
   RAISE NOTICE 'schema verification passed';
 END
 $$;

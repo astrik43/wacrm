@@ -1812,6 +1812,32 @@
       "networkError": "서버에 연결할 수 없습니다"
     },
     "shopify": {
+      "variantLabel": "적용 대상",
+      "variantHint": "COD 또는 선결제 템플릿이 켜져 있으면 해당 주문에 사용됩니다. 그렇지 않으면 “모든 주문” 템플릿이 사용됩니다.",
+      "variants": {
+        "all": "모든 주문",
+        "cod": "COD 주문",
+        "prepaid": "선결제 주문"
+      },
+      "delayLabel": "전송 전 대기",
+      "delayUnits": {
+        "minutes": "분",
+        "hours": "시간",
+        "days": "일"
+      },
+      "delayHint": "0이면 Shopify가 변경을 알리는 즉시 메시지를 보냅니다.",
+      "delayHintCart": "고객의 전화번호가 결제 단계에 처음 나타난 시점부터 계산합니다. 최소 {min}분.",
+      "delayTooLong": "지연은 최대 30일까지 가능합니다",
+      "cartDelayTooShort": "장바구니 알림은 최소 {min}분의 지연이 필요합니다",
+      "delayMinutes": "{count}분 후",
+      "delayHours": "{count}시간 후",
+      "delayDays": "{count}일 후",
+      "cartTitle": "장바구니 알림",
+      "cartDesc": "결제를 시작했지만 주문하지 않은 고객에게 알립니다. 고객이 주문하면 대기 중인 알림은 취소됩니다.",
+      "tagOrdersOn": "주문 태그를 사용할 수 있어 COD 확인 페이지에서 주문에 태그를 추가할 수 있습니다.",
+      "tagOrdersOff": "앱에 write_orders 액세스 범위가 없어 COD 확인 페이지에서 주문에 태그를 추가할 수 없습니다. 범위를 추가하고 새 버전을 릴리스한 뒤 스토어에서 승인하세요.",
+      "overdueWarning": "예약된 메시지 {count}건이 10분 이상 늦어지고 있습니다. 스케줄러가 /api/shopify/cron을 호출하는지 확인하세요.",
+      "sendsAt": "{date} 전송 예정",
       "webhookLogTitle": "웹훅 로그",
       "webhookLogDesc": "지난 30일 동안 Shopify가 이 워크스페이스로 보낸 모든 전송과 처리 결과입니다.",
       "webhookLogEmpty": "아직 수신된 웹훅이 없습니다.",
@@ -1832,6 +1858,7 @@
         "error": "오류"
       },
       "outcomeStatus": {
+        "scheduled": "예약됨",
         "sent": "전송됨",
         "skipped": "건너뜀",
         "failed": "실패",
@@ -1839,6 +1866,8 @@
         "disabled": "꺼져 있음"
       },
       "webhookDetail": {
+        "checkout_completed": "결제가 완료되어 알림을 보내지 않습니다",
+        "no_phone": "결제에 아직 사용할 수 있는 전화번호가 없습니다",
         "invalid_signature": "서명이 저장된 서명 시크릿과 일치하지 않습니다",
         "invalid_json": "본문이 올바른 JSON이 아닙니다",
         "connection_paused": "연결이 일시 중지되었습니다",
@@ -1852,8 +1881,8 @@
         "order_cancelled": "주문이 취소되어 배송 알림을 보내지 않습니다",
         "payload_too_large_to_store": "페이로드가 너무 커서 저장하지 않았습니다"
       },
-      "productImagesTitle": "상품 이미지",
-      "productImagesDesc": "이미지 헤더가 있는 템플릿에 주문한 상품을 표시합니다. Shopify Dev Dashboard에서 read_products 액세스 범위로 앱을 만들고 스토어에 설치한 다음 자격 증명을 여기에 붙여넣으세요.",
+      "productImagesTitle": "Shopify 앱",
+      "productImagesDesc": "이미지 헤더에 주문한 상품을 표시하고 COD 확인 페이지에서 주문에 태그를 추가하는 데 필요합니다. Shopify Dev Dashboard에서 read_products 및 write_orders 액세스 범위로 앱을 만들고 스토어에 설치한 뒤 자격 증명을 여기에 붙여넣으세요.",
       "apiConnected": "연결됨",
       "apiNotConnected": "설정 안 됨",
       "clientIdLabel": "클라이언트 ID",
@@ -1863,13 +1892,13 @@
       "apiSave": "저장 및 확인",
       "apiSaved": "Shopify가 자격 증명을 승인했습니다",
       "apiRemove": "자격 증명 삭제",
-      "apiRemoved": "상품 이미지가 꺼졌습니다",
+      "apiRemoved": "Shopify 앱 자격 증명을 제거했습니다",
       "apiRequired": "클라이언트 ID와 클라이언트 시크릿을 모두 입력하세요",
       "headerImageLabel": "헤더 이미지",
       "headerImageTemplate": "템플릿에 저장된 이미지",
       "headerImageProduct": "상품 이미지 (주문의 첫 번째 상품)",
       "headerImageHint": "상품에 이미지가 없으면 템플릿에 저장된 이미지가 사용됩니다.",
-      "headerImageNeedsApi": "상품 이미지에서 Shopify 앱 자격 증명을 추가하세요. 그렇지 않으면 템플릿에 저장된 이미지가 사용됩니다.",
+      "headerImageNeedsApi": "Shopify 앱에서 앱 자격 증명을 추가하세요. 그렇지 않으면 템플릿에 저장된 이미지가 사용됩니다.",
       "title": "Shopify 주문 알림",
       "description": "Shopify 주문이 접수, 발송, 배송 출발, 배송 완료 또는 취소될 때 고객에게 WhatsApp 템플릿을 보냅니다.",
       "loadFailed": "Shopify 설정을 불러오지 못했습니다",
@@ -1890,6 +1919,8 @@
       "webhookUrlLabel": "웹훅 URL",
       "webhookUrlHint": "Shopify 관리자에서 설정 → 알림 → 웹훅을 열고, 아래 각 이벤트에 대해 이 URL로 웹훅(JSON 형식)을 하나씩 만드세요:",
       "topics": {
+        "checkouts_create": "결제 생성",
+        "checkouts_update": "결제 업데이트",
         "orders_create": "주문 생성",
         "orders_cancelled": "주문 취소",
         "fulfillments_create": "주문 처리 생성",
@@ -1911,8 +1942,20 @@
       "disconnectConfirm": "연결 해제 확인",
       "disconnected": "Shopify 연결이 해제되었습니다",
       "eventsTitle": "주문 알림",
-      "eventsDesc": "원하는 알림을 켜고 각각 승인된 템플릿을 선택하세요.",
+      "eventsDesc": "원하는 알림을 켜고 각각 승인된 템플릿을 선택하세요. 알림을 열어 COD 또는 선결제 주문용 템플릿이나 지연을 추가할 수 있습니다.",
       "events": {
+        "cart_reminder_1": {
+          "label": "장바구니 알림 1",
+          "desc": "결제를 시작하고 완료하지 않았을 때 보내는 첫 번째 알림입니다."
+        },
+        "cart_reminder_2": {
+          "label": "장바구니 알림 2",
+          "desc": "고객이 여전히 주문하지 않았을 때 보내는 두 번째 알림입니다."
+        },
+        "cart_reminder_3": {
+          "label": "장바구니 알림 3",
+          "desc": "고객이 여전히 주문하지 않았을 때 보내는 마지막 알림입니다."
+        },
         "order_created": {
           "label": "주문 생성",
           "desc": "새 주문이 접수되면 한 번 전송됩니다."
@@ -1956,6 +1999,11 @@
       "staticPlaceholder": "삽입할 텍스트",
       "fallbackPlaceholder": "비어 있을 때 대체 값 (선택)",
       "fields": {
+        "payment_mode": "결제 방식",
+        "cod_confirm_token": "COD 확인 페이지 (버튼 접미사)",
+        "cod_confirm_url": "COD 확인 페이지 링크",
+        "checkout_url": "결제 복구 링크",
+        "checkout_url_path": "결제 복구 링크 (버튼 접미사)",
         "customer_first_name": "고객 이름",
         "customer_name": "고객 전체 이름",
         "order_number": "주문 번호",
@@ -1974,10 +2022,12 @@
       "preview": "샘플 값으로 미리보기",
       "enableLabel": "이 알림 보내기",
       "activityTitle": "활동",
-      "activityDesc": "최근 주문 알림과 각각의 처리 결과입니다.",
+      "activityDesc": "가장 최근 알림과 각 처리 결과입니다.",
       "noActivity": "아직 없습니다. Shopify가 이벤트를 보내면 여기에 표시됩니다.",
       "refresh": "새로고침",
       "status": {
+        "scheduled": "예약됨",
+        "cancelled": "취소됨",
         "sent": "전송됨",
         "skipped": "건너뜀",
         "failed": "실패",
@@ -1985,6 +2035,10 @@
         "unknown": "확인되지 않음"
       },
       "reasons": {
+        "order_cancelled": "전송 시각 전에 주문이 취소되었습니다",
+        "order_placed": "고객이 주문했습니다",
+        "checkout_completed": "결제가 완료되었습니다",
+        "event_disabled": "전송 시각 전에 알림이 꺼졌습니다",
         "db_error": "데이터베이스 오류로 전송이 중단되었습니다",
         "no_phone": "주문에 사용할 수 있는 전화번호가 없습니다",
         "template_not_found": "이 워크스페이스에 템플릿이 더 이상 없습니다",
@@ -2109,6 +2163,20 @@
     "emailPlaceholder": "you@example.com",
     "sending": "전송 중...",
     "sendLink": "재설정 링크 보내기"
+  },
+  "OrderConfirm": {
+    "title": "주문 {order}",
+    "titleNoNumber": "주문 내역",
+    "greeting": "{name}님, 안녕하세요",
+    "items": "상품",
+    "total": "합계",
+    "payment": "결제",
+    "prompt": "이 주문의 배송을 원하시는지 확인해 주세요.",
+    "confirm": "주문 확인",
+    "cancel": "주문 취소",
+    "confirmed": "감사합니다. 주문이 확인되었습니다.",
+    "cancelRequested": "취소 요청이 접수되었습니다.",
+    "alreadyCancelled": "이 주문은 취소되었습니다."
   },
   "JoinPage": {
     "fail": {

@@ -7,7 +7,13 @@
 // server-only imports — so the client can use the catalogue.
 // ============================================================
 
-import { FULFILLMENT_EVENTS, type ShopifyEvent } from './events';
+import {
+  CART_EVENTS,
+  FULFILLMENT_EVENTS,
+  ORDER_EVENTS,
+  type PaymentMode,
+  type ShopifyEvent,
+} from './events';
 
 export const SHOPIFY_FIELD_KEYS = [
   'customer_first_name',
@@ -23,6 +29,11 @@ export const SHOPIFY_FIELD_KEYS = [
   'tracking_company',
   'tracking_url',
   'cancel_reason',
+  'payment_mode',
+  'cod_confirm_token',
+  'cod_confirm_url',
+  'checkout_url',
+  'checkout_url_path',
   'product_image_url',
 ] as const;
 
@@ -39,7 +50,7 @@ export function isShopifyFieldKey(value: unknown): value is ShopifyFieldKey {
 interface FieldMeta {
   /** Shown in the settings preview. */
   sample: string;
-  /** Events the field can be filled for; omitted = all six. */
+  /** Events the field can be filled for; omitted = all of them. */
   events?: readonly ShopifyEvent[];
   /**
    * 'image' fields hold a picture link: they fill a template's image
@@ -51,15 +62,19 @@ interface FieldMeta {
 export const SHOPIFY_FIELDS: Record<ShopifyFieldKey, FieldMeta> = {
   customer_first_name: { sample: 'Priya' },
   customer_name: { sample: 'Priya Nair' },
-  order_number: { sample: '#1042' },
+  order_number: { sample: '#1042', events: ORDER_EVENTS },
   order_total: { sample: '2499.00' },
   currency: { sample: 'INR' },
   item_summary: { sample: 'Aviator sunglasses × 1 +1 more' },
   item_count: { sample: '2' },
   order_status_url: {
     sample: 'https://example.myshopify.com/orders/abc123/authenticate?key=xyz',
+    events: ORDER_EVENTS,
   },
-  order_status_url_path: { sample: 'orders/abc123/authenticate?key=xyz' },
+  order_status_url_path: {
+    sample: 'orders/abc123/authenticate?key=xyz',
+    events: ORDER_EVENTS,
+  },
   tracking_number: { sample: 'EX123456789', events: FULFILLMENT_EVENTS },
   tracking_company: { sample: 'BlueDart', events: FULFILLMENT_EVENTS },
   tracking_url: {
@@ -67,6 +82,25 @@ export const SHOPIFY_FIELDS: Record<ShopifyFieldKey, FieldMeta> = {
     events: FULFILLMENT_EVENTS,
   },
   cancel_reason: { sample: 'customer', events: ['order_cancelled'] },
+  payment_mode: { sample: 'Cash on Delivery', events: ORDER_EVENTS },
+  // The slug of the public confirmation page: the suffix of a template
+  // button whose URL is https://<this CRM>/o/{{1}}.
+  cod_confirm_token: {
+    sample: 'Zk3vX9aQ2mLw8RtY5uHc1BnE7pJd4GsF',
+    events: ORDER_EVENTS,
+  },
+  cod_confirm_url: {
+    sample: 'https://crm.example.com/o/Zk3vX9aQ2mLw8RtY5uHc1BnE7pJd4GsF',
+    events: ORDER_EVENTS,
+  },
+  checkout_url: {
+    sample: 'https://example.myshopify.com/checkouts/abc123/recover?key=xyz',
+    events: CART_EVENTS,
+  },
+  checkout_url_path: {
+    sample: 'checkouts/abc123/recover?key=xyz',
+    events: CART_EVENTS,
+  },
   product_image_url: {
     sample: 'https://cdn.shopify.com/s/files/sample-product.jpg',
     kind: 'image',
@@ -197,6 +231,52 @@ export function extractOrderFields(order: unknown): ShopifyFields {
   put(fields, 'order_status_url', statusUrl);
   put(fields, 'order_status_url_path', statusUrl ? urlPath(statusUrl) : '');
   put(fields, 'cancel_reason', str(o.cancel_reason));
+  fields.payment_mode = paymentModeLabel(paymentModeOf(o));
+  return fields;
+}
+
+const COD_GATEWAY = /cash on delivery|\bcod\b/i;
+
+/**
+ * How an order is paid, from the gateways Shopify lists on it. Any
+ * cash-on-delivery gateway ("Cash on Delivery (COD)") makes it COD;
+ * everything else, including an order with no gateway, is prepaid.
+ */
+export function paymentModeOf(order: unknown): PaymentMode {
+  const o = obj(order) ?? {};
+  const names = Array.isArray(o.payment_gateway_names)
+    ? o.payment_gateway_names
+    : [];
+  const candidates = [...names, o.gateway];
+  return candidates.some((n) => typeof n === 'string' && COD_GATEWAY.test(n))
+    ? 'cod'
+    : 'prepaid';
+}
+
+/** What a customer reads for a payment mode. */
+export function paymentModeLabel(mode: PaymentMode): string {
+  return mode === 'cod' ? 'Cash on Delivery' : 'Prepaid';
+}
+
+/**
+ * Flat mappable values from a `checkouts/*` payload — the same names
+ * as an order where they mean the same thing, so a cart template maps
+ * "customer name" and "items" exactly like an order template.
+ */
+export function extractCheckoutFields(checkout: unknown): ShopifyFields {
+  const c = obj(checkout) ?? {};
+  const fields: ShopifyFields = {};
+  const { firstName, fullName } = extractOrderCustomer(c);
+  put(fields, 'customer_first_name', firstName);
+  put(fields, 'customer_name', fullName);
+  put(fields, 'order_total', str(c.total_price));
+  put(fields, 'currency', str(c.presentment_currency) || str(c.currency));
+  const { summary, count } = summariseItems(c.line_items);
+  put(fields, 'item_summary', summary);
+  if (count > 0) fields.item_count = String(count);
+  const recoverUrl = str(c.abandoned_checkout_url);
+  put(fields, 'checkout_url', recoverUrl);
+  put(fields, 'checkout_url_path', recoverUrl ? urlPath(recoverUrl) : '');
   return fields;
 }
 
