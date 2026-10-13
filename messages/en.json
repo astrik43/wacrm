@@ -1674,7 +1674,8 @@
       "fields": "Fields & tags",
       "deals": "Deals & currency",
       "members": "Team members",
-      "api": "API keys"
+      "api": "API keys",
+      "shopify": "Shopify"
     },
     "groups": {
       "account": "Account",
@@ -1809,6 +1810,129 @@
       "newKeyDesc": "Name it after the integration that will use it, and grant only the scopes it needs.",
       "done": "Done",
       "networkError": "Could not reach the server"
+    },
+    "shopify": {
+      "title": "Shopify order updates",
+      "description": "Send customers a WhatsApp template when their Shopify order is placed, shipped, out for delivery, delivered or cancelled.",
+      "loadFailed": "Failed to load Shopify settings",
+      "networkError": "Could not reach the server",
+      "saveFailed": "Failed to save",
+      "saved": "Shopify settings saved",
+      "save": "Save",
+      "saving": "Saving…",
+      "cancel": "Cancel",
+      "connectTitle": "No store connected",
+      "connectButton": "Connect store",
+      "statusConnected": "Connected",
+      "statusPaused": "Paused",
+      "statusNotConnected": "Not connected",
+      "lastEvent": "Last event received {date}",
+      "noEventsYet": "No events received yet",
+      "adminOnly": "Ask an admin to connect or change the Shopify store.",
+      "webhookUrlLabel": "Webhook URL",
+      "webhookUrlHint": "In Shopify admin, open Settings → Notifications → Webhooks and create one webhook (format JSON) to this URL for each of these events:",
+      "topics": {
+        "orders_create": "Order creation",
+        "orders_cancelled": "Order cancellation",
+        "fulfillments_create": "Fulfillment creation",
+        "fulfillments_update": "Fulfillment update"
+      },
+      "copy": "Copy",
+      "copySuccess": "Webhook URL copied",
+      "copyFailed": "Copy failed — select and copy manually",
+      "secretLabel": "Webhook signing secret",
+      "secretPlaceholder": "Paste the secret from Shopify",
+      "secretSavedPlaceholder": "Saved. Enter a new one to replace it",
+      "secretHint": "Shown on the Webhooks page in Shopify. Stored encrypted and never displayed again.",
+      "secretRequired": "Paste the webhook signing secret from Shopify",
+      "countryCodeLabel": "Default country code",
+      "countryCodeHint": "Added to phone numbers typed without a country code. Leave empty to skip those numbers.",
+      "pause": "Pause",
+      "resume": "Resume",
+      "disconnect": "Disconnect",
+      "disconnectConfirm": "Confirm disconnect",
+      "disconnected": "Shopify disconnected",
+      "eventsTitle": "Order updates",
+      "eventsDesc": "Switch on the updates you want and choose an approved template for each.",
+      "events": {
+        "order_created": {
+          "label": "Order created",
+          "desc": "Sent once when a new order is placed."
+        },
+        "tracking_added": {
+          "label": "Tracking added",
+          "desc": "Sent once when a shipment gets its first tracking number."
+        },
+        "tracking_updated": {
+          "label": "Tracking updated",
+          "desc": "Sent when a shipment's tracking number changes to a different one."
+        },
+        "out_for_delivery": {
+          "label": "Out for delivery",
+          "desc": "Sent once when Shopify marks the shipment as out for delivery."
+        },
+        "delivered": {
+          "label": "Delivered",
+          "desc": "Sent once when Shopify marks the shipment as delivered."
+        },
+        "order_cancelled": {
+          "label": "Order cancelled",
+          "desc": "Sent once when the order is cancelled in Shopify."
+        }
+      },
+      "notConfigured": "No template chosen",
+      "usingTemplate": "Template: {name}",
+      "configure": "Set up",
+      "edit": "Edit",
+      "enableNeedsTemplate": "Choose a template before switching this update on",
+      "mappingIncomplete": "Every placeholder needs a value",
+      "eventSaved": "Update saved",
+      "templateLabel": "Template",
+      "templatePlaceholder": "Choose an approved template",
+      "noApprovedTemplates": "No approved templates yet. Create one under Settings → Templates and wait for Meta to approve it.",
+      "slotHeader": "Header {val}",
+      "slotBody": "Body {val}",
+      "slotButton": "Button “{name}” link {val}",
+      "sourcePlaceholder": "Choose a value",
+      "sourceStatic": "Fixed text",
+      "staticPlaceholder": "Text to insert",
+      "fallbackPlaceholder": "Fallback if empty (optional)",
+      "fields": {
+        "customer_first_name": "Customer first name",
+        "customer_name": "Customer full name",
+        "order_number": "Order number",
+        "order_total": "Order total",
+        "currency": "Currency",
+        "item_summary": "Item summary",
+        "item_count": "Item count",
+        "order_status_url": "Order status link",
+        "order_status_url_path": "Order status link (button suffix)",
+        "tracking_number": "Tracking number",
+        "tracking_company": "Courier",
+        "tracking_url": "Tracking link",
+        "cancel_reason": "Cancel reason"
+      },
+      "preview": "Preview with sample values",
+      "enableLabel": "Send this update",
+      "activityTitle": "Activity",
+      "activityDesc": "The most recent order updates and what happened to each.",
+      "noActivity": "Nothing yet. Updates appear here once Shopify sends an event.",
+      "refresh": "Refresh",
+      "status": {
+        "sent": "Sent",
+        "skipped": "Skipped",
+        "failed": "Failed",
+        "pending": "Sending",
+        "unknown": "Not confirmed"
+      },
+      "reasons": {
+        "no_phone": "The order has no usable phone number",
+        "template_not_found": "The template no longer exists in this workspace",
+        "template_not_approved": "The template is not approved by Meta",
+        "template_malformed": "The template needs a sync from Meta",
+        "mapping_invalid": "The variable mapping is invalid",
+        "missing_variable": "No value for {slot} on this order"
+      }
     },
     "deals": {
       "title": "Deals & currency",

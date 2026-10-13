@@ -75,6 +75,26 @@ BEGIN
       'messages.error_code/error_title/error_details are missing — migration 042 did not apply';
   END IF;
 
+  -- Shopify integration (043). The webhook path and the settings
+  -- routes use untyped clients, so a missing table or a wrong RPC
+  -- signature is a runtime error on a customer's order, not a build
+  -- failure.
+  IF to_regclass('public.shopify_configs') IS NULL
+     OR to_regclass('public.shopify_event_templates') IS NULL
+     OR to_regclass('public.shopify_orders') IS NULL
+     OR to_regclass('public.shopify_fulfillments') IS NULL
+     OR to_regclass('public.shopify_notifications') IS NULL THEN
+    RAISE EXCEPTION
+      'shopify_* tables are missing — migration 043 did not apply';
+  END IF;
+
+  IF to_regprocedure(
+       'public.shopify_apply_fulfillment(uuid, text, text, text, text, text, text, timestamptz)'
+     ) IS NULL THEN
+    RAISE EXCEPTION
+      'shopify_apply_fulfillment is missing — migration 043 did not apply';
+  END IF;
+
   RAISE NOTICE 'schema verification passed';
 END
 $$;

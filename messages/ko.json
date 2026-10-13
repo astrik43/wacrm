@@ -1674,7 +1674,8 @@
       "fields": "필드 & 태그",
       "deals": "딜 & 통화",
       "members": "팀원",
-      "api": "API 키"
+      "api": "API 키",
+      "shopify": "Shopify"
     },
     "groups": {
       "account": "계정",
@@ -1809,6 +1810,129 @@
       "newKeyDesc": "이 키를 사용할 연동 서비스의 이름을 붙이고, 필요한 권한 범위만 부여하세요.",
       "done": "완료",
       "networkError": "서버에 연결할 수 없습니다"
+    },
+    "shopify": {
+      "title": "Shopify 주문 알림",
+      "description": "Shopify 주문이 접수, 발송, 배송 출발, 배송 완료 또는 취소될 때 고객에게 WhatsApp 템플릿을 보냅니다.",
+      "loadFailed": "Shopify 설정을 불러오지 못했습니다",
+      "networkError": "서버에 연결할 수 없습니다",
+      "saveFailed": "저장하지 못했습니다",
+      "saved": "Shopify 설정이 저장되었습니다",
+      "save": "저장",
+      "saving": "저장 중…",
+      "cancel": "취소",
+      "connectTitle": "연결된 스토어 없음",
+      "connectButton": "스토어 연결",
+      "statusConnected": "연결됨",
+      "statusPaused": "일시 중지됨",
+      "statusNotConnected": "연결 안 됨",
+      "lastEvent": "마지막 이벤트 수신: {date}",
+      "noEventsYet": "아직 수신된 이벤트가 없습니다",
+      "adminOnly": "Shopify 스토어를 연결하거나 변경하려면 관리자에게 문의하세요.",
+      "webhookUrlLabel": "웹훅 URL",
+      "webhookUrlHint": "Shopify 관리자에서 설정 → 알림 → 웹훅을 열고, 아래 각 이벤트에 대해 이 URL로 웹훅(JSON 형식)을 하나씩 만드세요:",
+      "topics": {
+        "orders_create": "주문 생성",
+        "orders_cancelled": "주문 취소",
+        "fulfillments_create": "주문 처리 생성",
+        "fulfillments_update": "주문 처리 업데이트"
+      },
+      "copy": "복사",
+      "copySuccess": "웹훅 URL이 복사되었습니다",
+      "copyFailed": "복사 실패 — 직접 선택하여 복사하세요",
+      "secretLabel": "웹훅 서명 시크릿",
+      "secretPlaceholder": "Shopify의 시크릿을 붙여넣으세요",
+      "secretSavedPlaceholder": "저장됨. 교체하려면 새 값을 입력하세요",
+      "secretHint": "Shopify의 웹훅 페이지에 표시됩니다. 암호화되어 저장되며 다시 표시되지 않습니다.",
+      "secretRequired": "Shopify의 웹훅 서명 시크릿을 붙여넣으세요",
+      "countryCodeLabel": "기본 국가 번호",
+      "countryCodeHint": "국가 번호 없이 입력된 전화번호에 추가됩니다. 비워 두면 해당 번호는 건너뜁니다.",
+      "pause": "일시 중지",
+      "resume": "재개",
+      "disconnect": "연결 해제",
+      "disconnectConfirm": "연결 해제 확인",
+      "disconnected": "Shopify 연결이 해제되었습니다",
+      "eventsTitle": "주문 알림",
+      "eventsDesc": "원하는 알림을 켜고 각각 승인된 템플릿을 선택하세요.",
+      "events": {
+        "order_created": {
+          "label": "주문 생성",
+          "desc": "새 주문이 접수되면 한 번 전송됩니다."
+        },
+        "tracking_added": {
+          "label": "운송장 추가",
+          "desc": "배송에 첫 운송장 번호가 등록되면 한 번 전송됩니다."
+        },
+        "tracking_updated": {
+          "label": "운송장 변경",
+          "desc": "배송의 운송장 번호가 다른 번호로 바뀌면 전송됩니다."
+        },
+        "out_for_delivery": {
+          "label": "배송 출발",
+          "desc": "Shopify가 배송을 배송 출발로 표시하면 한 번 전송됩니다."
+        },
+        "delivered": {
+          "label": "배송 완료",
+          "desc": "Shopify가 배송을 배송 완료로 표시하면 한 번 전송됩니다."
+        },
+        "order_cancelled": {
+          "label": "주문 취소",
+          "desc": "Shopify에서 주문이 취소되면 한 번 전송됩니다."
+        }
+      },
+      "notConfigured": "선택된 템플릿 없음",
+      "usingTemplate": "템플릿: {name}",
+      "configure": "설정",
+      "edit": "수정",
+      "enableNeedsTemplate": "이 알림을 켜기 전에 템플릿을 선택하세요",
+      "mappingIncomplete": "모든 자리 표시자에 값이 필요합니다",
+      "eventSaved": "알림이 저장되었습니다",
+      "templateLabel": "템플릿",
+      "templatePlaceholder": "승인된 템플릿 선택",
+      "noApprovedTemplates": "아직 승인된 템플릿이 없습니다. 설정 → 템플릿에서 만들고 Meta의 승인을 기다리세요.",
+      "slotHeader": "헤더 {val}",
+      "slotBody": "본문 {val}",
+      "slotButton": "버튼 “{name}” 링크 {val}",
+      "sourcePlaceholder": "값 선택",
+      "sourceStatic": "고정 텍스트",
+      "staticPlaceholder": "삽입할 텍스트",
+      "fallbackPlaceholder": "비어 있을 때 대체 값 (선택)",
+      "fields": {
+        "customer_first_name": "고객 이름",
+        "customer_name": "고객 전체 이름",
+        "order_number": "주문 번호",
+        "order_total": "주문 총액",
+        "currency": "통화",
+        "item_summary": "상품 요약",
+        "item_count": "상품 수량",
+        "order_status_url": "주문 상태 링크",
+        "order_status_url_path": "주문 상태 링크 (버튼 접미사)",
+        "tracking_number": "운송장 번호",
+        "tracking_company": "택배사",
+        "tracking_url": "배송 조회 링크",
+        "cancel_reason": "취소 사유"
+      },
+      "preview": "샘플 값으로 미리보기",
+      "enableLabel": "이 알림 보내기",
+      "activityTitle": "활동",
+      "activityDesc": "최근 주문 알림과 각각의 처리 결과입니다.",
+      "noActivity": "아직 없습니다. Shopify가 이벤트를 보내면 여기에 표시됩니다.",
+      "refresh": "새로고침",
+      "status": {
+        "sent": "전송됨",
+        "skipped": "건너뜀",
+        "failed": "실패",
+        "pending": "전송 중",
+        "unknown": "확인되지 않음"
+      },
+      "reasons": {
+        "no_phone": "주문에 사용할 수 있는 전화번호가 없습니다",
+        "template_not_found": "이 워크스페이스에 템플릿이 더 이상 없습니다",
+        "template_not_approved": "템플릿이 Meta의 승인을 받지 않았습니다",
+        "template_malformed": "템플릿을 Meta에서 동기화해야 합니다",
+        "mapping_invalid": "변수 매핑이 올바르지 않습니다",
+        "missing_variable": "이 주문에는 {slot}의 값이 없습니다"
+      }
     },
     "deals": {
       "title": "딜 & 통화",

@@ -1658,7 +1658,8 @@
       "fields": "Campos e tags",
       "deals": "Negócios e moeda",
       "members": "Membros da equipe",
-      "api": "Chaves de API"
+      "api": "Chaves de API",
+      "shopify": "Shopify"
     },
     "groups": {
       "account": "Conta",
@@ -1791,6 +1792,129 @@
       "newKeyDesc": "Nomeie-a conforme a integração que vai usá-la e conceda apenas os escopos necessários.",
       "done": "Concluído",
       "networkError": "Não foi possível conectar ao servidor"
+    },
+    "shopify": {
+      "title": "Atualizações de pedidos da Shopify",
+      "description": "Envie aos clientes um modelo do WhatsApp quando o pedido da Shopify for feito, enviado, sair para entrega, for entregue ou cancelado.",
+      "loadFailed": "Falha ao carregar as configurações da Shopify",
+      "networkError": "Não foi possível conectar ao servidor",
+      "saveFailed": "Falha ao salvar",
+      "saved": "Configurações da Shopify salvas",
+      "save": "Salvar",
+      "saving": "Salvando…",
+      "cancel": "Cancelar",
+      "connectTitle": "Nenhuma loja conectada",
+      "connectButton": "Conectar loja",
+      "statusConnected": "Conectada",
+      "statusPaused": "Pausada",
+      "statusNotConnected": "Não conectada",
+      "lastEvent": "Último evento recebido em {date}",
+      "noEventsYet": "Nenhum evento recebido ainda",
+      "adminOnly": "Peça a um administrador para conectar ou alterar a loja da Shopify.",
+      "webhookUrlLabel": "URL do webhook",
+      "webhookUrlHint": "No admin da Shopify, abra Configurações → Notificações → Webhooks e crie um webhook (formato JSON) para esta URL para cada um destes eventos:",
+      "topics": {
+        "orders_create": "Criação de pedido",
+        "orders_cancelled": "Cancelamento de pedido",
+        "fulfillments_create": "Criação de processamento",
+        "fulfillments_update": "Atualização de processamento"
+      },
+      "copy": "Copiar",
+      "copySuccess": "URL do webhook copiada",
+      "copyFailed": "Falha ao copiar — selecione e copie manualmente",
+      "secretLabel": "Segredo de assinatura do webhook",
+      "secretPlaceholder": "Cole o segredo da Shopify",
+      "secretSavedPlaceholder": "Salvo. Digite um novo para substituir",
+      "secretHint": "Exibido na página de Webhooks da Shopify. Armazenado criptografado e nunca mais exibido.",
+      "secretRequired": "Cole o segredo de assinatura do webhook da Shopify",
+      "countryCodeLabel": "Código de país padrão",
+      "countryCodeHint": "Adicionado aos números digitados sem código de país. Deixe vazio para ignorar esses números.",
+      "pause": "Pausar",
+      "resume": "Retomar",
+      "disconnect": "Desconectar",
+      "disconnectConfirm": "Confirmar desconexão",
+      "disconnected": "Shopify desconectada",
+      "eventsTitle": "Atualizações de pedido",
+      "eventsDesc": "Ative as atualizações que deseja e escolha um modelo aprovado para cada uma.",
+      "events": {
+        "order_created": {
+          "label": "Pedido criado",
+          "desc": "Enviada uma vez quando um novo pedido é feito."
+        },
+        "tracking_added": {
+          "label": "Rastreio adicionado",
+          "desc": "Enviada uma vez quando uma remessa recebe o primeiro código de rastreio."
+        },
+        "tracking_updated": {
+          "label": "Rastreio atualizado",
+          "desc": "Enviada quando o código de rastreio de uma remessa muda para outro."
+        },
+        "out_for_delivery": {
+          "label": "Saiu para entrega",
+          "desc": "Enviada uma vez quando a Shopify marca a remessa como saiu para entrega."
+        },
+        "delivered": {
+          "label": "Entregue",
+          "desc": "Enviada uma vez quando a Shopify marca a remessa como entregue."
+        },
+        "order_cancelled": {
+          "label": "Pedido cancelado",
+          "desc": "Enviada uma vez quando o pedido é cancelado na Shopify."
+        }
+      },
+      "notConfigured": "Nenhum modelo escolhido",
+      "usingTemplate": "Modelo: {name}",
+      "configure": "Configurar",
+      "edit": "Editar",
+      "enableNeedsTemplate": "Escolha um modelo antes de ativar esta atualização",
+      "mappingIncomplete": "Todos os espaços reservados precisam de um valor",
+      "eventSaved": "Atualização salva",
+      "templateLabel": "Modelo",
+      "templatePlaceholder": "Escolha um modelo aprovado",
+      "noApprovedTemplates": "Ainda não há modelos aprovados. Crie um em Configurações → Modelos e aguarde a aprovação da Meta.",
+      "slotHeader": "Cabeçalho {val}",
+      "slotBody": "Corpo {val}",
+      "slotButton": "Link do botão “{name}” {val}",
+      "sourcePlaceholder": "Escolha um valor",
+      "sourceStatic": "Texto fixo",
+      "staticPlaceholder": "Texto a inserir",
+      "fallbackPlaceholder": "Alternativa se vazio (opcional)",
+      "fields": {
+        "customer_first_name": "Primeiro nome do cliente",
+        "customer_name": "Nome completo do cliente",
+        "order_number": "Número do pedido",
+        "order_total": "Total do pedido",
+        "currency": "Moeda",
+        "item_summary": "Resumo dos itens",
+        "item_count": "Quantidade de itens",
+        "order_status_url": "Link de status do pedido",
+        "order_status_url_path": "Link de status do pedido (sufixo do botão)",
+        "tracking_number": "Código de rastreio",
+        "tracking_company": "Transportadora",
+        "tracking_url": "Link de rastreio",
+        "cancel_reason": "Motivo do cancelamento"
+      },
+      "preview": "Prévia com valores de exemplo",
+      "enableLabel": "Enviar esta atualização",
+      "activityTitle": "Atividade",
+      "activityDesc": "As atualizações de pedido mais recentes e o que aconteceu com cada uma.",
+      "noActivity": "Nada ainda. As atualizações aparecem aqui quando a Shopify enviar um evento.",
+      "refresh": "Atualizar",
+      "status": {
+        "sent": "Enviada",
+        "skipped": "Ignorada",
+        "failed": "Falhou",
+        "pending": "Enviando",
+        "unknown": "Não confirmada"
+      },
+      "reasons": {
+        "no_phone": "O pedido não tem um número de telefone utilizável",
+        "template_not_found": "O modelo não existe mais neste workspace",
+        "template_not_approved": "O modelo não está aprovado pela Meta",
+        "template_malformed": "O modelo precisa ser sincronizado com a Meta",
+        "mapping_invalid": "O mapeamento de variáveis é inválido",
+        "missing_variable": "Sem valor para {slot} neste pedido"
+      }
     },
     "deals": {
       "title": "Negócios e moeda",

@@ -89,6 +89,18 @@ export interface SendMessageParams {
   replyToMessageId?: string | null;
 }
 
+/**
+ * Behaviour switches for non-human senders. The defaults are the
+ * agent-send behaviour, so existing callers are unaffected. System
+ * integrations (e.g. Shopify order updates) pass `senderType: 'bot'`
+ * and `pauseActiveFlows: false` — an automated notification is not an
+ * agent reply and must not end the contact's running Flow.
+ */
+export interface SendMessageOptions {
+  senderType?: 'agent' | 'bot';
+  pauseActiveFlows?: boolean;
+}
+
 export interface SendMessageResult {
   /** Our `messages.id` (the persisted row). */
   messageId: string;
@@ -186,7 +198,8 @@ export function validateSendMessageParams(params: {
 export async function sendMessageToConversation(
   db: SupabaseClient,
   accountId: string,
-  params: SendMessageParams
+  params: SendMessageParams,
+  options: SendMessageOptions = {}
 ): Promise<SendMessageResult> {
   const {
     conversationId,
@@ -477,7 +490,7 @@ export async function sendMessageToConversation(
     .from('messages')
     .insert({
       conversation_id: conversationId,
-      sender_type: 'agent',
+      sender_type: options.senderType ?? 'agent',
       content_type: messageType,
       content_text: persistedText,
       media_url: mediaUrl || null,
@@ -516,25 +529,27 @@ export async function sendMessageToConversation(
 
   // Pause any active Flow run for this contact — the agent stepping in
   // is the strongest "yield, human is here" signal. Best-effort.
-  try {
-    const { error: pauseErr } = await supabaseAdmin()
-      .from('flow_runs')
-      .update({
-        status: 'paused_by_agent',
-        ended_at: new Date().toISOString(),
-        end_reason: 'agent_replied',
-      })
-      .eq('account_id', accountId)
-      .eq('contact_id', contact.id)
-      .eq('status', 'active');
-    if (pauseErr) {
-      console.error('[flows] pause-on-agent-send failed:', pauseErr.message);
+  if (options.pauseActiveFlows !== false) {
+    try {
+      const { error: pauseErr } = await supabaseAdmin()
+        .from('flow_runs')
+        .update({
+          status: 'paused_by_agent',
+          ended_at: new Date().toISOString(),
+          end_reason: 'agent_replied',
+        })
+        .eq('account_id', accountId)
+        .eq('contact_id', contact.id)
+        .eq('status', 'active');
+      if (pauseErr) {
+        console.error('[flows] pause-on-agent-send failed:', pauseErr.message);
+      }
+    } catch (err) {
+      console.error(
+        '[flows] pause-on-agent-send threw:',
+        err instanceof Error ? err.message : err
+      );
     }
-  } catch (err) {
-    console.error(
-      '[flows] pause-on-agent-send threw:',
-      err instanceof Error ? err.message : err
-    );
   }
 
   return { messageId: messageRecord.id, whatsappMessageId: waMessageId };
