@@ -21,7 +21,15 @@ import type {
 import { supabaseAdmin } from './admin-client'
 import { addContactTagIfAbsent } from '@/lib/contacts/tag-write'
 import { MAX_TAG_CHAIN_DEPTH, getTagChainDepth } from '@/lib/contacts/tag-chain'
-import { engineSendText, engineSendTemplate, engineSendInteractive } from './meta-send'
+import {
+  engineSendImage,
+  engineSendText,
+  engineSendTemplate,
+  engineSendInteractive,
+} from './meta-send'
+
+/** WhatsApp's limit on an image caption. */
+const IMAGE_CAPTION_MAX = 1024
 import { validateInteractivePayload } from '@/lib/whatsapp/interactive'
 import { isDeliverableUrl } from '@/lib/webhooks/ssrf'
 import {
@@ -367,7 +375,35 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
     case 'send_message': {
       const cfg = step.step_config as SendMessageStepConfig
       if (!args.contactId) throw new Error('send_message needs a contact')
-      const text = await interpolate(cfg.text, args)
+      const text = await interpolate(cfg.text ?? '', args)
+      const imageUrl = cfg.image_url?.trim() ?? ''
+      if (imageUrl) {
+        if (!/^https:\/\//i.test(imageUrl)) {
+          throw new Error('send_message image must be an https link')
+        }
+        const conversationId = await resolveConversationId(args)
+        // A caption is capped at 1024 characters; longer text follows
+        // the picture as its own message instead.
+        const captioned = text.trim().length <= IMAGE_CAPTION_MAX
+        const { whatsapp_message_id } = await engineSendImage({
+          accountId: args.automation.account_id,
+          userId: args.automation.user_id,
+          conversationId,
+          contactId: args.contactId,
+          link: imageUrl,
+          caption: captioned && text.trim() ? text : undefined,
+        })
+        if (!captioned) {
+          await engineSendText({
+            accountId: args.automation.account_id,
+            userId: args.automation.user_id,
+            conversationId,
+            contactId: args.contactId,
+            text,
+          })
+        }
+        return `image sent via Meta (${whatsapp_message_id})`
+      }
       if (!text.trim()) throw new Error('send_message has empty text')
       const conversationId = await resolveConversationId(args)
       const { whatsapp_message_id } = await engineSendText({

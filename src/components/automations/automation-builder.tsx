@@ -34,6 +34,8 @@ import {
   ArrowUp,
   MousePointerClick,
   List,
+  ImagePlus,
+  X,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -78,6 +80,10 @@ import {
   contactToken,
 } from "@/lib/automations/variables"
 import { extractVariableIndices } from "@/lib/whatsapp/template-validators"
+import {
+  MEDIA_MAX_BYTES_BY_KIND,
+  uploadAccountMedia,
+} from "@/lib/storage/upload-media"
 
 // ------------------------------------------------------------
 // Types (builder-local — mirror the flattened rows we POST)
@@ -664,6 +670,124 @@ function SendTemplateFields({
       </div>
     )}
     </>
+  )
+}
+
+// Same types the chat-media bucket and WhatsApp both accept for images.
+const IMAGE_ACCEPT = "image/jpeg,image/png"
+
+/**
+ * Optional picture for a Send message step: upload one (to the
+ * account's chat-media bucket) or paste a public https link. With a
+ * picture the step sends an image whose caption is the message text.
+ */
+function MessageImagePicker({
+  value,
+  onChange,
+  t,
+}: {
+  value: string
+  onChange: (url: string) => void
+  t: ReturnType<typeof useTranslations>
+}) {
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [uploading, setUploading] = useState(false)
+
+  async function handleFile(file: File) {
+    if (!IMAGE_ACCEPT.split(",").includes(file.type)) {
+      toast.error(t("config.imageWrongType"))
+      return
+    }
+    if (file.size > MEDIA_MAX_BYTES_BY_KIND.image) {
+      toast.error(
+        t("config.imageTooLarge", {
+          max: Math.round(MEDIA_MAX_BYTES_BY_KIND.image / 1024 / 1024),
+        }),
+      )
+      return
+    }
+    setUploading(true)
+    try {
+      const { publicUrl } = await uploadAccountMedia("chat-media", file)
+      onChange(publicUrl)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("config.imageUploadFailed"))
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  if (value) {
+    return (
+      <div className="flex items-start gap-2">
+        {/* eslint-disable-next-line @next/next/no-img-element -- user-supplied URL, any host */}
+        <img
+          src={value}
+          alt=""
+          className="h-20 w-20 rounded-md border border-border object-cover"
+        />
+        <div className="min-w-0 flex-1 space-y-1">
+          <p className="truncate text-[11px] text-muted-foreground" title={value}>
+            {value}
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => onChange("")}
+          >
+            <X className="size-3.5" />
+            {t("config.imageRemove")}
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <input
+        ref={fileRef}
+        type="file"
+        accept={IMAGE_ACCEPT}
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0]
+          e.target.value = ""
+          if (file) void handleFile(file)
+        }}
+      />
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={uploading}
+          onClick={() => fileRef.current?.click()}
+        >
+          {uploading ? (
+            <Loader2 className="size-3.5 animate-spin" />
+          ) : (
+            <ImagePlus className="size-3.5" />
+          )}
+          {t("config.imageUpload")}
+        </Button>
+      </div>
+      <Input
+        placeholder={t("config.imageUrlPlaceholder")}
+        className="bg-muted text-foreground"
+        onBlur={(e) => {
+          const url = e.target.value.trim()
+          if (!url) return
+          if (!/^https:\/\//i.test(url)) {
+            toast.error(t("config.imageNeedsHttps"))
+            return
+          }
+          onChange(url)
+        }}
+      />
+      <p className="text-[11px] text-muted-foreground">{t("config.imageHint")}</p>
+    </div>
   )
 }
 
@@ -1433,15 +1557,28 @@ function StepEditor({
   switch (step.step_type) {
     case "send_message":
       return (
-        <FieldBlock label={t("config.messageText")}>
-          <TextWithVariables
-            multiline
-            value={(cfg.text as string) ?? ""}
-            onChange={(text) => set({ text })}
-            placeholder={t("config.placeholderMessageText")}
-            t={t}
-          />
-        </FieldBlock>
+        <>
+          <FieldBlock label={t("config.imageLabel")}>
+            <MessageImagePicker
+              value={(cfg.image_url as string) ?? ""}
+              onChange={(image_url) => set({ image_url })}
+              t={t}
+            />
+          </FieldBlock>
+          <FieldBlock
+            label={
+              cfg.image_url ? t("config.captionText") : t("config.messageText")
+            }
+          >
+            <TextWithVariables
+              multiline
+              value={(cfg.text as string) ?? ""}
+              onChange={(text) => set({ text })}
+              placeholder={t("config.placeholderMessageText")}
+              t={t}
+            />
+          </FieldBlock>
+        </>
       )
     case "send_buttons":
     case "send_list":
@@ -1661,7 +1798,10 @@ function FieldBlock({
 function previewFor(step: BuilderStep): string {
   switch (step.step_type) {
     case "send_message":
-      return (step.step_config.text as string) || "no text yet"
+      return (
+        (step.step_config.image_url ? "🖼 " : "") +
+        ((step.step_config.text as string) || (step.step_config.image_url ? "" : "no text yet"))
+      )
     case "send_buttons":
     case "send_list":
       return interactivePayloadPreviewText(asInteractive(step.step_config)) || "no body yet"

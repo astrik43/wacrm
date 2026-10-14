@@ -1034,6 +1034,16 @@
       "config": {
         "messageText": "메시지 텍스트",
         "placeholderMessageText": "안녕하세요! 문의해주셔서 감사합니다…",
+        "imageLabel": "이미지 (선택)",
+        "captionText": "캡션",
+        "imageUpload": "이미지 업로드",
+        "imageUrlPlaceholder": "…또는 https 이미지 링크 붙여넣기",
+        "imageHint": "JPG 또는 PNG, 최대 5MB. 아래 텍스트를 캡션으로 하여 이미지로 발송됩니다.",
+        "imageRemove": "이미지 제거",
+        "imageWrongType": "JPG 또는 PNG 이미지를 사용하세요",
+        "imageTooLarge": "이미지는 최대 {max}MB까지 가능합니다",
+        "imageUploadFailed": "이미지를 업로드할 수 없습니다",
+        "imageNeedsHttps": "이미지 링크는 https://로 시작해야 합니다",
         "tagLabel": "태그",
         "modeLabel": "모드",
         "modes": {

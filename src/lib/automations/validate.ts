@@ -54,11 +54,17 @@ function walk(steps: StepLike[], prefix: string, issues: ValidationIssue[]): voi
 function validateOne(step: StepLike, path: string, issues: ValidationIssue[]): void {
   const c = step.step_config ?? {}
   switch (step.step_type) {
-    case 'send_message':
-      if (!nonEmpty(c.text)) {
+    case 'send_message': {
+      // An image on its own is a valid message; otherwise text is needed.
+      const image = typeof c.image_url === 'string' ? c.image_url.trim() : ''
+      if (image && !/^https:\/\//i.test(image)) {
+        issues.push({ path: `${path}.image_url`, message: 'image must be an https link' })
+      }
+      if (!image && !nonEmpty(c.text)) {
         issues.push({ path: `${path}.text`, message: 'message text is required' })
       }
       break
+    }
     case 'send_buttons':
     case 'send_list': {
       // The whole step_config IS the interactive payload; validate it

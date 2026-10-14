@@ -543,6 +543,9 @@ export type AutomationTriggerConfig =
 
 export interface SendMessageStepConfig {
   text: string;
+  /** Optional picture (public https URL). When set the message goes out
+   *  as an image with `text` as its caption. */
+  image_url?: string;
 }
 
 /**

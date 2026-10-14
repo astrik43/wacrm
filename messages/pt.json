@@ -1028,6 +1028,16 @@
       "config": {
         "messageText": "Texto da mensagem",
         "placeholderMessageText": "Olá! Obrigado por entrar em contato…",
+        "imageLabel": "Imagem (opcional)",
+        "captionText": "Legenda",
+        "imageUpload": "Enviar imagem",
+        "imageUrlPlaceholder": "…ou cole um link https de imagem",
+        "imageHint": "JPG ou PNG, até 5 MB. A mensagem é enviada como esta imagem, com o texto abaixo como legenda.",
+        "imageRemove": "Remover imagem",
+        "imageWrongType": "Use uma imagem JPG ou PNG",
+        "imageTooLarge": "Imagens podem ter até {max} MB",
+        "imageUploadFailed": "Não foi possível enviar a imagem",
+        "imageNeedsHttps": "O link da imagem deve começar com https://",
         "tagLabel": "Tag",
         "modeLabel": "Modo",
         "modes": {

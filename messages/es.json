@@ -1028,6 +1028,16 @@
       "config": {
         "messageText": "Texto del mensaje",
         "placeholderMessageText": "¡Hola! Gracias por escribirnos…",
+        "imageLabel": "Imagen (opcional)",
+        "captionText": "Pie de foto",
+        "imageUpload": "Subir imagen",
+        "imageUrlPlaceholder": "…o pega un enlace https de imagen",
+        "imageHint": "JPG o PNG, hasta 5 MB. El mensaje se envía como esta imagen, con el texto de abajo como pie de foto.",
+        "imageRemove": "Quitar imagen",
+        "imageWrongType": "Usa una imagen JPG o PNG",
+        "imageTooLarge": "Las imágenes pueden pesar hasta {max} MB",
+        "imageUploadFailed": "No se pudo subir la imagen",
+        "imageNeedsHttps": "El enlace de la imagen debe empezar por https://",
         "tagLabel": "Etiqueta",
         "modeLabel": "Modo",
         "modes": {
