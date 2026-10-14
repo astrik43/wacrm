@@ -4,6 +4,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react"
@@ -72,6 +73,11 @@ import {
   type StepPath,
 } from "@/lib/automations/builder-tree"
 import { cn } from "@/lib/utils"
+import {
+  CONTACT_VARIABLES,
+  contactToken,
+} from "@/lib/automations/variables"
+import { extractVariableIndices } from "@/lib/whatsapp/template-validators"
 
 // ------------------------------------------------------------
 // Types (builder-local — mirror the flattened rows we POST)
@@ -556,12 +562,18 @@ function DealPipelineFields({
 function SendTemplateFields({
   templateName,
   language,
+  variables,
   onChange,
   t,
 }: {
   templateName: string
   language: string
-  onChange: (patch: { template_name: string; language: string }) => void
+  variables: Record<string, string>
+  onChange: (patch: {
+    template_name?: string
+    language?: string
+    variables?: Record<string, string>
+  }) => void
   t: ReturnType<typeof useTranslations>
 }) {
   const { templates } = useResources()
@@ -599,13 +611,20 @@ function SendTemplateFields({
     (t) => toValue(t.name, t.language ?? "en_US") === current,
   )
 
+  const selected = templates.find(
+    (tmpl) => toValue(tmpl.name, tmpl.language ?? "en_US") === current,
+  )
+  const indices = selected ? extractVariableIndices(selected.body_text) : []
+
   return (
+    <>
     <FieldBlock label={t("templates.templateLabel")}>
       <select
         value={current}
         onChange={(e) => {
           const [name, lang] = e.target.value.split("::")
-          onChange({ template_name: name ?? "", language: lang ?? "" })
+          // Values typed for the previous template don't carry over.
+          onChange({ template_name: name ?? "", language: lang ?? "", variables: {} })
         }}
         className={SELECT_CLASS}
       >
@@ -625,6 +644,115 @@ function SendTemplateFields({
         )}
       </select>
     </FieldBlock>
+    {selected && indices.length > 0 && (
+      <div className="space-y-2">
+        <p className="text-xs whitespace-pre-wrap rounded-md border border-border bg-muted/50 p-2 text-muted-foreground">
+          {selected.body_text}
+        </p>
+        {indices.map((n) => (
+          <FieldBlock key={n} label={t("templates.variableLabel", { token: `{{${n}}}` })}>
+            <TextWithVariables
+              value={variables[String(n)] ?? ""}
+              onChange={(v) =>
+                onChange({ variables: { ...variables, [String(n)]: v } })
+              }
+              placeholder={selected.sample_values?.body?.[n - 1] ?? ""}
+              t={t}
+            />
+          </FieldBlock>
+        ))}
+      </div>
+    )}
+    </>
+  )
+}
+
+/**
+ * Text input (or textarea) with buttons that insert {{contact.*}}
+ * placeholders at the cursor. The engine fills them per contact — see
+ * src/lib/automations/variables.ts.
+ */
+function TextWithVariables({
+  value,
+  onChange,
+  placeholder,
+  multiline = false,
+  t,
+}: {
+  value: string
+  onChange: (v: string) => void
+  placeholder?: string
+  multiline?: boolean
+  t: ReturnType<typeof useTranslations>
+}) {
+  const ref = useRef<HTMLInputElement & HTMLTextAreaElement>(null)
+  // Explicit key map so the catalogue scanner can see every key.
+  const labelKey = {
+    name: "variables.name",
+    first_name: "variables.first_name",
+    phone: "variables.phone",
+    email: "variables.email",
+    company: "variables.company",
+  } as const
+
+  function insert(token: string) {
+    const el = ref.current
+    const start = el?.selectionStart ?? value.length
+    const end = el?.selectionEnd ?? value.length
+    const next = value.slice(0, start) + token + value.slice(end)
+    onChange(next)
+    requestAnimationFrame(() => {
+      if (!el) return
+      el.focus()
+      const pos = start + token.length
+      el.setSelectionRange(pos, pos)
+    })
+  }
+
+  return (
+    <div className="space-y-1.5">
+      {multiline ? (
+        <Textarea
+          ref={ref}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className="min-h-24 bg-muted text-foreground"
+        />
+      ) : (
+        <Input
+          ref={ref}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className="bg-muted text-foreground"
+        />
+      )}
+      <div className="flex flex-wrap items-center gap-1">
+        <span className="text-[11px] text-muted-foreground">
+          {t("variables.insert")}
+        </span>
+        {CONTACT_VARIABLES.map((field) => (
+          <button
+            key={field}
+            type="button"
+            onClick={() => insert(contactToken(field))}
+            className="rounded border border-border bg-muted px-1.5 py-0.5 text-[11px] text-foreground hover:border-primary/50 hover:text-primary"
+          >
+            {t(labelKey[field])}
+          </button>
+        ))}
+      </div>
+      {multiline && (
+        <p className="text-[11px] text-muted-foreground">
+          {/* The example goes in as an argument: ICU would parse {{ }}
+              inside the message itself. */}
+          {t("variables.fallbackHint", {
+            example: `{{contact.first_name | ${t("variables.fallbackWord")}}}`,
+          })}
+        </p>
+      )}
+    </div>
   )
 }
 
@@ -1306,11 +1434,12 @@ function StepEditor({
     case "send_message":
       return (
         <FieldBlock label={t("config.messageText")}>
-          <Textarea
+          <TextWithVariables
+            multiline
             value={(cfg.text as string) ?? ""}
-            onChange={(e) => set({ text: e.target.value })}
+            onChange={(text) => set({ text })}
             placeholder={t("config.placeholderMessageText")}
-            className="min-h-24 bg-muted text-foreground"
+            t={t}
           />
         </FieldBlock>
       )
@@ -1331,6 +1460,7 @@ function StepEditor({
         <SendTemplateFields
           templateName={(cfg.template_name as string) ?? ""}
           language={(cfg.language as string) ?? ""}
+          variables={(cfg.variables as Record<string, string>) ?? {}}
           onChange={(patch) => set(patch)}
           t={t}
         />

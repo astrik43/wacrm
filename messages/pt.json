@@ -1001,7 +1001,18 @@
         "languageLabel": "Idioma",
         "select": "Selecione um modelo…",
         "unknown": "{name} ({lang}) — não está na lista de aprovados",
-        "unknownLang": "desconhecido"
+        "unknownLang": "desconhecido",
+        "variableLabel": "Variável {token}"
+      },
+      "variables": {
+        "insert": "Inserir:",
+        "name": "Nome",
+        "first_name": "Primeiro nome",
+        "phone": "Telefone",
+        "email": "E-mail",
+        "company": "Empresa",
+        "fallbackHint": "Adicione um valor alternativo para contatos sem valor: {example}",
+        "fallbackWord": "cliente"
       },
       "branches": {
         "yes": "Sim",

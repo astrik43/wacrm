@@ -1007,7 +1007,18 @@
         "languageLabel": "언어",
         "select": "템플릿 선택…",
         "unknown": "{name} ({lang}) — 승인 목록에 없음",
-        "unknownLang": "알 수 없음"
+        "unknownLang": "알 수 없음",
+        "variableLabel": "변수 {token}"
+      },
+      "variables": {
+        "insert": "삽입:",
+        "name": "이름",
+        "first_name": "이름(First name)",
+        "phone": "전화번호",
+        "email": "이메일",
+        "company": "회사",
+        "fallbackHint": "값이 없는 연락처를 위한 대체값 추가: {example}",
+        "fallbackWord": "고객님"
       },
       "branches": {
         "yes": "예",

@@ -44,7 +44,7 @@ export const AUTOMATION_TEMPLATES: Record<TemplateSlug, AutomationTemplateDefini
       {
         step_type: 'send_message',
         step_config: {
-          text: "Hi! 👋 Thanks for reaching out. We'll get back to you shortly.",
+          text: "Hi {{contact.first_name | there}}! 👋 Thanks for reaching out. We'll get back to you shortly.",
         },
       },
       {

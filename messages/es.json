@@ -1001,7 +1001,18 @@
         "languageLabel": "Idioma",
         "select": "Selecciona una plantilla…",
         "unknown": "{name} ({lang}): no está en la lista de aprobadas",
-        "unknownLang": "desconocido"
+        "unknownLang": "desconocido",
+        "variableLabel": "Variable {token}"
+      },
+      "variables": {
+        "insert": "Insertar:",
+        "name": "Nombre",
+        "first_name": "Nombre de pila",
+        "phone": "Teléfono",
+        "email": "Correo",
+        "company": "Empresa",
+        "fallbackHint": "Añade un valor alternativo para contactos sin valor: {example}",
+        "fallbackWord": "cliente"
       },
       "branches": {
         "yes": "Sí",

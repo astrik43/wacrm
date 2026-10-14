@@ -1007,7 +1007,18 @@
         "languageLabel": "Language",
         "select": "Select a template…",
         "unknown": "{name} ({lang}) — not in approved list",
-        "unknownLang": "unknown"
+        "unknownLang": "unknown",
+        "variableLabel": "Variable {token}"
+      },
+      "variables": {
+        "insert": "Insert:",
+        "name": "Name",
+        "first_name": "First name",
+        "phone": "Phone",
+        "email": "Email",
+        "company": "Company",
+        "fallbackHint": "Add a fallback for contacts without a value: {example}",
+        "fallbackWord": "there"
       },
       "branches": {
         "yes": "Yes",
