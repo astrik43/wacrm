@@ -14,12 +14,19 @@
 //   - a fulfillment whose order we don't have yet waits briefly, then
 //     falls back to the phone on the shipment's destination address.
 //
-// Abandoned checkouts (`checkouts/*`) schedule up to three cart
-// reminders; a completed checkout, or an order from the same phone,
-// cancels the ones still waiting.
+// Abandoned checkouts (`checkouts/*`, or FlexyPe's abandoned-checkout
+// webhook via processFlexypeCheckout) schedule up to three cart
+// reminders; a completed checkout, or an order from the same phone or
+// FlexyPe session, cancels the ones still waiting.
 // ============================================================
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+
+import {
+  FLEXYPE_CHECKOUT_PREFIX,
+  flexypeSessionOfOrder,
+  type FlexypeCheckout,
+} from '@/lib/flexype/acr';
 
 import { fetchLineItemImage } from './admin-api';
 import { generateWebhookToken, type ShopifyConfigRow } from './config';
@@ -261,6 +268,14 @@ async function handleOrder(
         cartOnly: true,
       });
     }
+    // FlexyPe stamps its session id on the order it creates.
+    const flexypeSession = flexypeSessionOfOrder(order);
+    if (flexypeSession) {
+      await cancelScheduled(db, accountId, 'order_placed', {
+        checkoutId: `${FLEXYPE_CHECKOUT_PREFIX}${flexypeSession}`,
+        cartOnly: true,
+      });
+    }
     if (phone) {
       await cancelScheduled(db, accountId, 'order_placed', {
         phone,
@@ -368,19 +383,42 @@ async function handleCheckout(
   // claimed, so that later delivery can still schedule the reminders.
   if (!phone) return { orderRef, note: 'no_phone', outcomes: [] };
 
+  return scheduleCartReminders(db, accountId, {
+    checkoutId,
+    orderRef,
+    phone,
+    customerName: fullName || null,
+    fields,
+    webhookId,
+  });
+}
+
+/** Claim (and schedule) each enabled cart reminder for one checkout. */
+async function scheduleCartReminders(
+  db: SupabaseClient,
+  accountId: string,
+  cart: {
+    checkoutId: string;
+    orderRef: string;
+    phone: string;
+    customerName: string | null;
+    fields: ShopifyFields;
+    webhookId: string | null;
+  }
+): Promise<ProcessResult> {
   const outcomes: ProcessOutcome[] = [];
   for (const event of CART_EVENTS) {
     const outcome = await notifyShopifyEvent(db, accountId, {
       event,
-      dedupeKey: `${event}:${checkoutId}`,
+      dedupeKey: `${event}:${cart.checkoutId}`,
       orderId: null,
       fulfillmentId: null,
-      checkoutId,
-      orderName: orderRef,
-      phone,
-      customerName: fullName || null,
-      fields,
-      webhookId,
+      checkoutId: cart.checkoutId,
+      orderName: cart.orderRef,
+      phone: cart.phone,
+      customerName: cart.customerName,
+      fields: cart.fields,
+      webhookId: cart.webhookId,
     });
     // Every later update of the same checkout finds the reminders
     // already claimed; that is not news.
@@ -389,8 +427,59 @@ async function handleCheckout(
     }
   }
   return outcomes.length > 0
-    ? { orderRef, outcomes }
-    : { orderRef, note: 'no_change', outcomes: [] };
+    ? { orderRef: cart.orderRef, outcomes }
+    : { orderRef: cart.orderRef, note: 'no_change', outcomes: [] };
+}
+
+/**
+ * A FlexyPe abandoned checkout (already parsed — see
+ * src/lib/flexype/acr.ts). FlexyPe fires once per abandoned session,
+ * after it has already waited 15 minutes, so there is no stale-update
+ * or completion handling: the order that completes it arrives through
+ * Shopify's orders/create and cancels the reminders in handleOrder.
+ */
+export async function processFlexypeCheckout(
+  db: SupabaseClient,
+  config: ShopifyConfigRow,
+  cart: FlexypeCheckout,
+  eventId: string | null
+): Promise<ProcessResult> {
+  const accountId = config.account_id;
+  const orderRef = cart.customerName || cart.phone || cart.checkoutId;
+  const fields = { ...cart.fields };
+  // FlexyPe normally sends the picture; fall back to Shopify's.
+  if (!fields.product_image_url) {
+    const imageUrl = await fetchLineItemImage(db, config, cart.lineItem);
+    if (imageUrl) fields.product_image_url = imageUrl;
+  }
+
+  // Kept for the cron: it reads the checkout's creation time ("has
+  // this phone ordered since?") and its latest fields at send time.
+  const { error } = await db.from('shopify_checkouts').upsert(
+    {
+      account_id: accountId,
+      shopify_checkout_id: cart.checkoutId,
+      phone: cart.phone,
+      customer_name: cart.customerName,
+      fields,
+      completed_at: null,
+    },
+    { onConflict: 'account_id,shopify_checkout_id' }
+  );
+  if (error) {
+    console.error('[flexype] checkout upsert failed:', error.message);
+    return { orderRef, note: 'db_error', outcomes: [] };
+  }
+  if (!cart.phone) return { orderRef, note: 'no_phone', outcomes: [] };
+
+  return scheduleCartReminders(db, accountId, {
+    checkoutId: cart.checkoutId,
+    orderRef,
+    phone: cart.phone,
+    customerName: cart.customerName,
+    fields,
+    webhookId: eventId,
+  });
 }
 
 interface ApplyResult {

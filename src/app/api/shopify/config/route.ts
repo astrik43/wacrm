@@ -17,6 +17,11 @@
 // a store outside the app's organization is reported here rather than
 // as silently missing pictures later. The secret and the access token
 // are write-only too; only the client id is ever read back.
+//
+// FlexyPe (abandoned checkouts): `{ flexype: 'generate' }` switches it
+// on with a new random secret, `{ flexype: null }` switches it off.
+// Unlike the others this secret is generated here and shown to admins,
+// because they have to paste it into FlexyPe.
 // ============================================================
 
 import { NextResponse } from 'next/server';
@@ -39,13 +44,18 @@ import {
   requestAccessToken,
   ShopifyApiError,
 } from '@/lib/shopify/admin-api';
-import { generateWebhookToken, shopifyWebhookPath } from '@/lib/shopify/config';
-import { encrypt } from '@/lib/whatsapp/encryption';
+import {
+  flexypeWebhookPath,
+  generateWebhookToken,
+  shopifyWebhookPath,
+} from '@/lib/shopify/config';
+import { decrypt, encrypt } from '@/lib/whatsapp/encryption';
 
 // `webhook_secret`, `api_client_secret` and `api_access_token` are
 // deliberately excluded — they never leave the server.
+// `flexype_secret` is read so present() can show it to admins only.
 const SAFE_COLUMNS =
-  'id, webhook_token, shop_domain, default_country_code, is_active, last_webhook_at, created_at, api_client_id, api_scopes';
+  'id, webhook_token, shop_domain, default_country_code, is_active, last_webhook_at, created_at, api_client_id, api_scopes, flexype_secret, flexype_last_webhook_at';
 
 const MAX_SECRET_LEN = 256;
 
@@ -59,10 +69,38 @@ interface ConfigRow {
   created_at: string;
   api_client_id?: string | null;
   api_scopes?: string | null;
+  flexype_secret?: string | null;
+  flexype_last_webhook_at?: string | null;
+}
+
+function revealFlexypeSecret(ciphertext: string): string | null {
+  try {
+    return decrypt(ciphertext);
+  } catch (err) {
+    console.error(
+      '[shopify config] could not decrypt FlexyPe secret:',
+      err instanceof Error ? err.message : err
+    );
+    return null;
+  }
 }
 
 function present(row: ConfigRow, includeWebhookPath: boolean) {
+  const flexypeOn = Boolean(row.flexype_secret);
   return {
+    flexype: {
+      enabled: flexypeOn,
+      last_webhook_at: row.flexype_last_webhook_at ?? null,
+      // Admins only, like the Shopify webhook URL.
+      webhook_path:
+        flexypeOn && includeWebhookPath
+          ? flexypeWebhookPath(row.webhook_token)
+          : null,
+      secret:
+        flexypeOn && includeWebhookPath && row.flexype_secret
+          ? revealFlexypeSecret(row.flexype_secret)
+          : null,
+    },
     id: row.id,
     shop_domain: row.shop_domain,
     default_country_code: row.default_country_code,
@@ -128,6 +166,7 @@ export async function PUT(request: Request) {
       api_client_id?: unknown;
       api_client_secret?: unknown;
       shop_domain?: unknown;
+      flexype?: unknown;
     } | null;
 
     const patch: Record<string, unknown> = {};
@@ -170,6 +209,19 @@ export async function PUT(request: Request) {
         );
       }
       patch.is_active = body.is_active;
+    }
+
+    if (body?.flexype !== undefined) {
+      if (body.flexype === null) {
+        patch.flexype_secret = null;
+      } else if (body.flexype === 'generate') {
+        patch.flexype_secret = encrypt(generateWebhookToken());
+      } else {
+        return NextResponse.json(
+          { error: "'flexype' must be 'generate' or null" },
+          { status: 400 }
+        );
+      }
     }
 
     const { data: existing, error: findErr } = await ctx.supabase

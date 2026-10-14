@@ -166,7 +166,38 @@ Up to three reminders for a checkout that was started and not finished.
 > checkouts that happen in Shopify's own checkout. If your store uses a
 > separate checkout app, carts abandoned there may never reach wacrm.
 > Add the two webhooks and watch the Webhook log for `checkouts/create`
-> before relying on reminders.
+> before relying on reminders. For FlexyPe, see below.
+
+### FlexyPe checkout
+
+If the store checks out through [FlexyPe](https://flexype.io), FlexyPe —
+not Shopify — knows about abandoned carts, and sends its own
+*Abandoned Checkout Recovery* webhook 15 minutes after a checkout is
+left unfinished. wacrm turns those into the same cart reminders.
+
+1. Under **Settings → Shopify → FlexyPe abandoned checkouts**, press
+   **Connect FlexyPe**. wacrm shows a webhook URL and a secret.
+2. In FlexyPe, open **Settings → Webhooks**, add an endpoint with that
+   URL and secret, and subscribe to **Abandoned Checkout Recovery**
+   (version 2026-05; 2025-09 also works).
+3. Press **Test** in FlexyPe. The delivery appears in the Webhook log as
+   `flexype/abandoned_checkout` with *FlexyPe test delivery* and sends
+   nothing (FlexyPe's sample uses a placeholder phone number).
+4. Set up the reminders under **Cart reminders** as above. Map the
+   image header to *Product image* (FlexyPe sends the first item's
+   picture; wacrm falls back to Shopify's when it doesn't), and a URL
+   button to *Checkout recovery link (button suffix)* with
+   `https://checkout.flexype.io/` as the button's base URL — or use
+   *Checkout recovery link* in the body.
+
+- Delays count from when FlexyPe's webhook arrives, which is already
+  15 minutes after the checkout opened.
+- The order FlexyPe creates carries a `FlexyPe Session ID` note
+  attribute; when its `orders/create` arrives, that checkout's waiting
+  reminders are cancelled. An order from the same phone number cancels
+  them too.
+- **New secret** replaces the secret; update it in FlexyPe straight
+  away. **Disconnect FlexyPe** makes the URL answer `404`.
 
 ## Product image in the message
 

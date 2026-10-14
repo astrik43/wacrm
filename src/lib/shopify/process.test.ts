@@ -7,7 +7,7 @@ vi.mock('./notify', () => ({ notifyShopifyEvent: mocks.notify }));
 vi.mock('./admin-api', () => ({ fetchLineItemImage: mocks.fetchImage }));
 
 import type { ShopifyConfigRow } from './config';
-import { processShopifyWebhook } from './process';
+import { processFlexypeCheckout, processShopifyWebhook } from './process';
 
 const CONFIG: ShopifyConfigRow = {
   id: 'cfg-1',
@@ -23,6 +23,8 @@ const CONFIG: ShopifyConfigRow = {
   api_access_token: null,
   api_token_expires_at: null,
   api_scopes: null,
+  flexype_secret: null,
+  flexype_last_webhook_at: null,
 };
 
 interface Cancellation {
@@ -699,5 +701,105 @@ describe('processShopifyWebhook — abandoned checkouts', () => {
     expect(
       (later.checkoutUpserts[0].row.fields as Record<string, string>).product_image_url
     ).toBe('https://cdn.shopify.com/w.jpg');
+  });
+});
+
+describe('FlexyPe abandoned checkouts', () => {
+  const CART = {
+    checkoutId: 'flexype:sess-1',
+    phone: '919029130001',
+    customerName: 'Dinesh Kumar',
+    fields: {
+      customer_first_name: 'Dinesh',
+      checkout_url: 'https://checkout.flexype.io/abc',
+      product_image_url: 'https://cdn.shopify.com/ring.jpg',
+    },
+    lineItem: { variantId: '11', productId: '22' },
+    shopDomain: 'qxm9zm-ei.myshopify.com',
+  };
+
+  it('stores the checkout and claims all three reminders for it', async () => {
+    mocks.notify.mockResolvedValue({ status: 'scheduled', sendAt: 'x' });
+    const state = freshState();
+    const result = await processFlexypeCheckout(fakeDb(state), CONFIG, CART, 'evt-1');
+
+    expect(state.checkoutUpserts[0].row).toMatchObject({
+      account_id: 'acct-1',
+      shopify_checkout_id: 'flexype:sess-1',
+      phone: '919029130001',
+      customer_name: 'Dinesh Kumar',
+    });
+    expect(mocks.notify).toHaveBeenCalledTimes(3);
+    expect(mocks.notify.mock.calls.map((c) => c[2].dedupeKey)).toEqual([
+      'cart_reminder_1:flexype:sess-1',
+      'cart_reminder_2:flexype:sess-1',
+      'cart_reminder_3:flexype:sess-1',
+    ]);
+    expect(mocks.notify.mock.calls[0][2]).toMatchObject({
+      checkoutId: 'flexype:sess-1',
+      orderName: 'Dinesh Kumar',
+      webhookId: 'evt-1',
+    });
+    // FlexyPe sent a picture: no Shopify lookup.
+    expect(mocks.fetchImage).not.toHaveBeenCalled();
+    expect(result.outcomes).toHaveLength(3);
+  });
+
+  it("looks the picture up on Shopify when FlexyPe sent none", async () => {
+    mocks.fetchImage.mockResolvedValue('https://cdn.shopify.com/from-shopify.jpg');
+    const state = freshState();
+    const noPicture: Record<string, string> = { ...CART.fields };
+    delete noPicture.product_image_url;
+    await processFlexypeCheckout(
+      fakeDb(state),
+      CONFIG,
+      { ...CART, fields: noPicture },
+      null
+    );
+
+    expect(mocks.fetchImage).toHaveBeenCalledWith(expect.anything(), CONFIG, {
+      variantId: '11',
+      productId: '22',
+    });
+    expect(mocks.notify.mock.calls[0][2].fields.product_image_url).toBe(
+      'https://cdn.shopify.com/from-shopify.jpg'
+    );
+  });
+
+  it('schedules nothing without a phone', async () => {
+    const state = freshState();
+    const result = await processFlexypeCheckout(
+      fakeDb(state),
+      CONFIG,
+      { ...CART, phone: null },
+      null
+    );
+    expect(state.checkoutUpserts).toHaveLength(1);
+    expect(mocks.notify).not.toHaveBeenCalled();
+    expect(result.note).toBe('no_phone');
+  });
+
+  it("an order carrying FlexyPe's session id stops that checkout's reminders", async () => {
+    const state = freshState();
+    await processShopifyWebhook(
+      fakeDb(state),
+      CONFIG,
+      'orders/create',
+      {
+        ...ORDER,
+        note_attributes: [{ name: 'FlexyPe Session ID', value: 'sess-1' }],
+      },
+      null
+    );
+
+    const bySession = state.cancellations.find((c) =>
+      c.filters.some(
+        (f) => f[1] === 'shopify_checkout_id' && f[2] === 'flexype:sess-1'
+      )
+    );
+    expect(bySession?.patch).toMatchObject({
+      status: 'cancelled',
+      reason: 'order_placed',
+    });
   });
 });

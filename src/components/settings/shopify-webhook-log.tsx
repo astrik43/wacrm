@@ -77,6 +77,7 @@ const KNOWN_DETAILS = [
   'checkout_completed',
   'no_phone',
   'payload_too_large_to_store',
+  'test_event',
 ];
 
 interface Outcome {

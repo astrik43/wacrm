@@ -16,6 +16,7 @@ vi.mock('@/lib/auth/account', () => ({
 
 vi.mock('@/lib/whatsapp/encryption', () => ({
   encrypt: (v: string) => `enc:${v}`,
+  decrypt: (v: string) => v.replace(/^enc:/, ''),
 }));
 
 vi.mock('@/lib/shopify/admin-api', () => {
@@ -314,6 +315,45 @@ describe('/api/shopify/config', () => {
       api_scopes: 'read_products,write_orders',
     };
     expect((await (await GET()).json()).config.can_tag_orders).toBe(true);
+  });
+
+  it('PUT switches FlexyPe on with a fresh encrypted secret, and off', async () => {
+    state.existing = ROW;
+    expect((await put({ flexype: 'generate' })).status).toBe(200);
+    expect(state.updates[0].flexype_secret).toMatch(/^enc:[A-Za-z0-9_-]{32}$/);
+
+    expect((await put({ flexype: null })).status).toBe(200);
+    expect(state.updates[1]).toEqual({ flexype_secret: null });
+
+    expect((await put({ flexype: 'yes' })).status).toBe(400);
+  });
+
+  it('GET shows the FlexyPe URL and secret to admins only', async () => {
+    state.existing = {
+      ...ROW,
+      flexype_secret: 'enc:fx-secret',
+      flexype_last_webhook_at: '2026-10-14T10:00:00Z',
+    };
+
+    mocks.getCurrentAccount.mockResolvedValue(ctx(state, 'agent'));
+    const agent = await (await GET()).json();
+    expect(agent.config.flexype).toEqual({
+      enabled: true,
+      last_webhook_at: '2026-10-14T10:00:00Z',
+      webhook_path: null,
+      secret: null,
+    });
+    expect(JSON.stringify(agent)).not.toContain('fx-secret');
+
+    mocks.getCurrentAccount.mockResolvedValue(ctx(state, 'admin'));
+    const admin = await (await GET()).json();
+    expect(admin.config.flexype).toMatchObject({
+      webhook_path: '/api/flexype/webhook/tok_abcdefghijklmnop',
+      secret: 'fx-secret',
+    });
+
+    state.existing = ROW;
+    expect((await (await GET()).json()).config.flexype.enabled).toBe(false);
   });
 
   it('DELETE requires admin and removes the connection', async () => {
