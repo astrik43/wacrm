@@ -276,12 +276,46 @@ skipped rather than guessed.
   messages. They do not count as an agent reply and do not stop a
   running Flow.
 - A new customer becomes a contact, named from the order.
-- **Pause** keeps accepting webhooks but sends nothing. **Disconnect**
-  invalidates the webhook URL (your template mappings are kept).
+- **Testing mode** (below) replaced **Pause**. A store paused before
+  that shows **Resume**. **Disconnect** invalidates the webhook URL
+  (your template mappings are kept).
 
 > **Migration required:** apply
 > `supabase/migrations/046_shopify_delay_cod_cart.sql` before deploying
 > the version with delays, COD / prepaid templates and cart reminders.
+
+## Testing safely
+
+Your store's real orders keep arriving while you set things up, and
+they are messaged from the same WhatsApp number your customers know.
+Two tools let you try everything without them seeing half-finished
+messages.
+
+**Testing mode** (Settings → Shopify). Add up to five test numbers,
+with country code, and switch it on. While it is on:
+
+- A webhook about anyone else — an order, a shipment, a cart, a
+  FlexyPe abandoned checkout — is **ignored**: nothing is stored,
+  scheduled or sent. It still appears in the webhook log as *Ignored —
+  testing mode*, and Shopify still gets a success answer (an error
+  would make Shopify retry and eventually delete the webhook).
+- A webhook about a test number runs exactly as it will live. Place a
+  test order in Shopify with one of your numbers to try the whole
+  flow: COD/prepaid template, delays, follow-ups, the COD page.
+- Shipments are judged by their order's phone, so a test order's
+  tracking and delivery updates come through too.
+- Messages that were already scheduled for a customer when you switched
+  testing mode on are held back as *Skipped — testing mode*.
+
+Switch it off when your templates are final; customers then get
+updates again. Orders that arrived during testing are not sent
+afterwards.
+
+**Send test** (in each update's dialog). Sends the message you are
+editing right away to a number you choose, with values from your latest
+order (or sample values), ignoring its delay and whether it is switched
+on. Use it to check wording, variables and images; it is listed in
+Activity as *Test · …*.
 
 ## Webhook log
 

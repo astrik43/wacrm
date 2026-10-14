@@ -32,7 +32,11 @@ vi.mock('@/lib/whatsapp/template-body', () => ({
 }));
 
 import { SendMessageError } from '@/lib/whatsapp/send-message';
-import { notifyShopifyEvent, type NotifyInput } from './notify';
+import {
+  deliverNotification,
+  notifyShopifyEvent,
+  type NotifyInput,
+} from './notify';
 
 const TEMPLATE = {
   id: 'tpl-1',
@@ -69,6 +73,8 @@ interface FakeState {
   ledgerUpdates: Record<string, unknown>[];
   contactUpdates: Record<string, unknown>[];
   orderUpdates: Record<string, unknown>[];
+  /** shopify_configs test-mode row; 'error' simulates a failed read. */
+  testConfig?: { test_mode: boolean; test_phones: string[] } | 'error' | null;
 }
 
 function fakeDb(state: FakeState): SupabaseClient {
@@ -77,7 +83,14 @@ function fakeDb(state: FakeState): SupabaseClient {
       const builder: Record<string, unknown> = {
         select: () => builder,
         eq: () => builder,
-        maybeSingle: async () => ({ data: null, error: null }),
+        maybeSingle: async () =>
+          table === 'shopify_configs' && state.testConfig === 'error'
+            ? { data: null, error: { message: 'boom' } }
+            : {
+                data:
+                  table === 'shopify_configs' ? (state.testConfig ?? null) : null,
+                error: null,
+              },
         upsert: (row: Record<string, unknown>) => {
           state.claims.push(row);
           return { select: async () => ({ data: state.claimRows, error: null }) };
@@ -445,5 +458,54 @@ describe('notifyShopifyEvent — follow-up messages', () => {
     });
     expect(state.claims).toHaveLength(1);
     expect(state.claims[0]).toMatchObject({ variant: 'cod', step: 0 });
+  });
+});
+
+describe('notifyShopifyEvent — testing mode', () => {
+  const TEST_ON = { test_mode: true, test_phones: ['919029130001'] };
+
+  it('holds back a customer who is not a test number', async () => {
+    const state = freshState({
+      testConfig: TEST_ON,
+      eventRow: [EVENT_ROW, { ...EVENT_ROW, step: 1, delay_minutes: 60 }],
+    });
+    const outcome = await notifyShopifyEvent(fakeDb(state), 'acct-1', INPUT);
+    expect(outcome).toEqual({ status: 'skipped', reason: 'test_mode' });
+    // The follow-up is not scheduled either.
+    expect(state.claims.map((c) => c.status)).toEqual(['pending', 'pending']);
+    expect(state.ledgerUpdates.map((u) => u.reason)).toEqual([
+      'test_mode',
+      'test_mode',
+    ]);
+    expect(mocks.sendMessageToConversation).not.toHaveBeenCalled();
+  });
+
+  it('sends to a test number as usual', async () => {
+    const state = freshState({ testConfig: TEST_ON });
+    const outcome = await notifyShopifyEvent(fakeDb(state), 'acct-1', {
+      ...INPUT,
+      phone: '919029130001',
+    });
+    expect(outcome.status).toBe('sent');
+  });
+
+  it('sends nothing when testing mode cannot be read', async () => {
+    const state = freshState({ testConfig: 'error' });
+    const outcome = await notifyShopifyEvent(fakeDb(state), 'acct-1', INPUT);
+    expect(outcome).toEqual({ status: 'failed', reason: 'db_error' });
+    expect(state.claims).toEqual([]);
+  });
+
+  it('holds back a message scheduled before testing mode was switched on', async () => {
+    const state = freshState({ testConfig: TEST_ON });
+    const outcome = await deliverNotification(
+      fakeDb(state),
+      'acct-1',
+      'ledger-9',
+      EVENT_ROW as never,
+      { ...INPUT, orderId: '1001' }
+    );
+    expect(outcome).toEqual({ status: 'skipped', reason: 'test_mode' });
+    expect(mocks.sendMessageToConversation).not.toHaveBeenCalled();
   });
 });

@@ -32,10 +32,13 @@ export interface ShopifyConfigRow {
   /** AES-256-GCM ciphertext of the FlexyPe webhook secret; null = off. */
   flexype_secret: string | null;
   flexype_last_webhook_at: string | null;
+  /** Only test_phones get messages while this is on. */
+  test_mode: boolean;
+  test_phones: string[] | null;
 }
 
 const CONFIG_COLUMNS =
-  'id, account_id, webhook_token, webhook_secret, shop_domain, default_country_code, is_active, last_webhook_at, api_client_id, api_client_secret, api_access_token, api_token_expires_at, api_scopes, flexype_secret, flexype_last_webhook_at';
+  'id, account_id, webhook_token, webhook_secret, shop_domain, default_country_code, is_active, last_webhook_at, api_client_id, api_client_secret, api_access_token, api_token_expires_at, api_scopes, flexype_secret, flexype_last_webhook_at, test_mode, test_phones';
 
 /** 32 url-safe characters (192 bits) — the path segment of the webhook URL. */
 export function generateWebhookToken(): string {

@@ -18,7 +18,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { Loader2, Plus, Trash2 } from 'lucide-react';
+import { Loader2, Plus, Send, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { Button } from '@/components/ui/button';
@@ -137,6 +137,7 @@ export function ShopifyEventDialog({
   settings,
   initialVariant,
   initialStep = 0,
+  testPhones = [],
   hasApiCredentials,
   onOpenChange,
   onSaved,
@@ -145,6 +146,8 @@ export function ShopifyEventDialog({
   settings: ShopifyEventSetting[];
   initialVariant: ShopifyVariant;
   initialStep?: number;
+  /** The store's test numbers (digits only), offered for "Send test". */
+  testPhones?: string[];
   /** Whether the store can look product pictures up (Shopify app set). */
   hasApiCredentials: boolean;
   onOpenChange: (open: boolean) => void;
@@ -163,6 +166,11 @@ export function ShopifyEventDialog({
   // Follow-ups added in this dialog that haven't been saved yet.
   const [drafts, setDrafts] = useState<ShopifyEventSetting[]>([]);
   const [removing, setRemoving] = useState(false);
+  const [testPhone, setTestPhone] = useState(
+    testPhones[0] ? `+${testPhones[0]}` : ''
+  );
+  const [testSource, setTestSource] = useState<'latest' | 'sample'>('latest');
+  const [testing, setTesting] = useState(false);
   const [delayAmount, setDelayAmount] = useState('0');
   const [delayUnit, setDelayUnit] = useState<DelayUnit>('minutes');
 
@@ -346,6 +354,50 @@ export function ShopifyEventDialog({
       toast.error(t('networkError'));
     } finally {
       setRemoving(false);
+    }
+  }
+
+  async function handleSendTest() {
+    if (!template || problems.length > 0) {
+      toast.error(t('mappingIncomplete'));
+      return;
+    }
+    if (!testPhone.trim()) {
+      toast.error(t('testPhoneRequired'));
+      return;
+    }
+    setTesting(true);
+    try {
+      const res = await fetch('/api/shopify/events/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          event,
+          variant,
+          step,
+          template_name: template.name,
+          template_language: template.language ?? null,
+          variable_mapping: mapping,
+          phone: testPhone.trim(),
+          source: testSource,
+        }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (res.ok) {
+        toast.success(t('testSent', { phone: `+${payload.phone ?? ''}` }));
+      } else {
+        toast.error(
+          payload.outcome?.reason
+            ? t('testFailed', { reason: payload.outcome.reason })
+            : payload.error || t('saveFailed')
+        );
+      }
+      onSaved();
+    } catch (err) {
+      console.error('[ShopifyEventDialog] test send error:', err);
+      toast.error(t('networkError'));
+    } finally {
+      setTesting(false);
     }
   }
 
@@ -579,6 +631,56 @@ export function ShopifyEventDialog({
                 <p className="border-border bg-muted text-foreground rounded-md border p-3 text-sm whitespace-pre-wrap">
                   {preview}
                 </p>
+              </div>
+            )}
+
+            {template && (
+              <div className="border-border space-y-2 rounded-md border p-3">
+                <Label className="text-muted-foreground">{t('testSendLabel')}</Label>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <Input
+                    id="shopify-test-send-phone"
+                    inputMode="tel"
+                    list="shopify-test-phones"
+                    value={testPhone}
+                    placeholder="+91 98765 43210"
+                    onChange={(e) => setTestPhone(e.target.value)}
+                  />
+                  <datalist id="shopify-test-phones">
+                    {testPhones.map((p) => (
+                      <option key={p} value={`+${p}`} />
+                    ))}
+                  </datalist>
+                  <Select
+                    value={testSource}
+                    onValueChange={(val) => {
+                      if (val === 'latest' || val === 'sample') setTestSource(val);
+                    }}
+                  >
+                    <SelectTrigger className="border-border bg-muted text-foreground w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="border-border bg-popover">
+                      <SelectItem value="latest">{t('testSourceLatest')}</SelectItem>
+                      <SelectItem value="sample">{t('testSourceSample')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={testing || problems.length > 0}
+                  onClick={handleSendTest}
+                >
+                  {testing ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Send className="size-4" />
+                  )}
+                  {t('testSendButton')}
+                </Button>
+                <p className="text-muted-foreground text-xs">{t('testSendHint')}</p>
               </div>
             )}
 

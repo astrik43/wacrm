@@ -25,6 +25,8 @@ const CONFIG: ShopifyConfigRow = {
   api_scopes: null,
   flexype_secret: null,
   flexype_last_webhook_at: null,
+  test_mode: false,
+  test_phones: [],
 };
 
 interface Cancellation {
@@ -801,5 +803,92 @@ describe('FlexyPe abandoned checkouts', () => {
       status: 'cancelled',
       reason: 'order_placed',
     });
+  });
+});
+
+describe('testing mode — only test numbers get through', () => {
+  const TESTING: ShopifyConfigRow = {
+    ...CONFIG,
+    test_mode: true,
+    test_phones: ['919029130001'],
+  };
+  const FULFILLMENT = {
+    id: 255858046,
+    order_id: 820982911946154500,
+    status: 'success',
+    tracking_number: 'EX123',
+    destination: { phone: '98765 43210' },
+  };
+
+  it('drops an order for anyone else before storing it', async () => {
+    const state = freshState();
+    const result = await processShopifyWebhook(
+      fakeDb(state),
+      TESTING,
+      'orders/create',
+      ORDER,
+      'wh-1'
+    );
+    expect(result).toEqual({ orderRef: '#1042', note: 'test_mode', outcomes: [] });
+    expect(state.orderUpserts).toEqual([]);
+    expect(mocks.notify).not.toHaveBeenCalled();
+  });
+
+  it('processes an order for a test number as usual', async () => {
+    const state = freshState();
+    await processShopifyWebhook(
+      fakeDb(state),
+      TESTING,
+      'orders/create',
+      { ...ORDER, customer: { ...ORDER.customer, phone: '+919029130001' } },
+      'wh-1'
+    );
+    expect(state.orderUpserts).toHaveLength(1);
+    expect(mocks.notify).toHaveBeenCalled();
+  });
+
+  it("judges a shipment by its stored order's phone", async () => {
+    const blocked = freshState({ storedOrder: STORED_ORDER, rpcResult: NEW });
+    const result = await processShopifyWebhook(
+      fakeDb(blocked),
+      TESTING,
+      'fulfillments/create',
+      FULFILLMENT,
+      'wh-2'
+    );
+    expect(result.note).toBe('test_mode');
+    expect(blocked.rpcCalls).toEqual([]);
+
+    const allowed = freshState({
+      storedOrder: { ...STORED_ORDER, phone: '919029130001' },
+      rpcResult: NEW,
+    });
+    await processShopifyWebhook(
+      fakeDb(allowed),
+      TESTING,
+      'fulfillments/create',
+      FULFILLMENT,
+      'wh-2'
+    );
+    expect(allowed.rpcCalls).toHaveLength(1);
+  });
+
+  it('drops a FlexyPe cart for anyone else', async () => {
+    const state = freshState();
+    const result = await processFlexypeCheckout(
+      fakeDb(state),
+      { ...TESTING, test_phones: ['919999999999'] },
+      {
+        checkoutId: 'flexype:sess-1',
+        phone: '919029130001',
+        customerName: 'Dinesh Kumar',
+        fields: {},
+        lineItem: null,
+        shopDomain: null,
+      },
+      'evt-1'
+    );
+    expect(result.note).toBe('test_mode');
+    expect(state.checkoutUpserts).toEqual([]);
   });
 });

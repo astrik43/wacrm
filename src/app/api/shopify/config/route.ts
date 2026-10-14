@@ -18,6 +18,10 @@
 // as silently missing pictures later. The secret and the access token
 // are write-only too; only the client id is ever read back.
 //
+// Test mode: `{ test_mode, test_phones }`. While it is on, only the
+// listed numbers (normalised like order phones, at most 5) get
+// messages; see loadTestGuard in notify.ts.
+//
 // FlexyPe (abandoned checkouts): `{ flexype: 'generate' }` switches it
 // on with a new random secret, `{ flexype: null }` switches it off.
 // Unlike the others this secret is generated here and shown to admins,
@@ -44,6 +48,7 @@ import {
   requestAccessToken,
   ShopifyApiError,
 } from '@/lib/shopify/admin-api';
+import { normalizeShopifyPhone } from '@/lib/shopify/phone';
 import {
   flexypeWebhookPath,
   generateWebhookToken,
@@ -55,9 +60,10 @@ import { decrypt, encrypt } from '@/lib/whatsapp/encryption';
 // deliberately excluded — they never leave the server.
 // `flexype_secret` is read so present() can show it to admins only.
 const SAFE_COLUMNS =
-  'id, webhook_token, shop_domain, default_country_code, is_active, last_webhook_at, created_at, api_client_id, api_scopes, flexype_secret, flexype_last_webhook_at';
+  'id, webhook_token, shop_domain, default_country_code, is_active, last_webhook_at, created_at, api_client_id, api_scopes, flexype_secret, flexype_last_webhook_at, test_mode, test_phones';
 
 const MAX_SECRET_LEN = 256;
+const MAX_TEST_PHONES = 5;
 
 interface ConfigRow {
   id: string;
@@ -71,6 +77,8 @@ interface ConfigRow {
   api_scopes?: string | null;
   flexype_secret?: string | null;
   flexype_last_webhook_at?: string | null;
+  test_mode?: boolean | null;
+  test_phones?: string[] | null;
 }
 
 function revealFlexypeSecret(ciphertext: string): string | null {
@@ -101,6 +109,9 @@ function present(row: ConfigRow, includeWebhookPath: boolean) {
           ? revealFlexypeSecret(row.flexype_secret)
           : null,
     },
+    // Every member sees that test mode is on; the numbers are admin-only.
+    test_mode: row.test_mode === true,
+    test_phones: includeWebhookPath ? (row.test_phones ?? []) : [],
     id: row.id,
     shop_domain: row.shop_domain,
     default_country_code: row.default_country_code,
@@ -167,6 +178,8 @@ export async function PUT(request: Request) {
       api_client_secret?: unknown;
       shop_domain?: unknown;
       flexype?: unknown;
+      test_mode?: unknown;
+      test_phones?: unknown;
     } | null;
 
     const patch: Record<string, unknown> = {};
@@ -211,6 +224,16 @@ export async function PUT(request: Request) {
       patch.is_active = body.is_active;
     }
 
+    if (body?.test_mode !== undefined) {
+      if (typeof body.test_mode !== 'boolean') {
+        return NextResponse.json(
+          { error: "'test_mode' must be a boolean" },
+          { status: 400 }
+        );
+      }
+      patch.test_mode = body.test_mode;
+    }
+
     if (body?.flexype !== undefined) {
       if (body.flexype === null) {
         patch.flexype_secret = null;
@@ -226,7 +249,7 @@ export async function PUT(request: Request) {
 
     const { data: existing, error: findErr } = await ctx.supabase
       .from('shopify_configs')
-      .select('id, shop_domain')
+      .select('id, shop_domain, default_country_code')
       .eq('account_id', ctx.accountId)
       .maybeSingle();
     if (findErr) {
@@ -235,6 +258,39 @@ export async function PUT(request: Request) {
         { error: 'Failed to save Shopify settings' },
         { status: 500 }
       );
+    }
+
+    if (body?.test_phones !== undefined) {
+      const raw = body.test_phones;
+      if (
+        !Array.isArray(raw) ||
+        raw.length > MAX_TEST_PHONES ||
+        raw.some((p) => typeof p !== 'string')
+      ) {
+        return NextResponse.json(
+          { error: `'test_phones' must be a list of at most ${MAX_TEST_PHONES} numbers` },
+          { status: 400 }
+        );
+      }
+      const countryCode =
+        (patch.default_country_code as string | null | undefined) !== undefined
+          ? (patch.default_country_code as string | null)
+          : ((existing?.default_country_code as string | null) ?? null);
+      const phones: string[] = [];
+      for (const entry of raw as string[]) {
+        if (!entry.trim()) continue;
+        const phone = normalizeShopifyPhone(entry, countryCode);
+        if (!phone) {
+          return NextResponse.json(
+            {
+              error: `"${entry.slice(0, 32)}" is not a usable phone number. Include the country code, e.g. +91 98765 43210.`,
+            },
+            { status: 400 }
+          );
+        }
+        if (!phones.includes(phone)) phones.push(phone);
+      }
+      patch.test_phones = phones;
     }
 
     if (body?.api_client_id === null) {

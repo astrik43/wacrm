@@ -160,6 +160,19 @@ BEGIN
     RAISE EXCEPTION
       'shopify_event_templates step index is missing — migration 048 did not apply';
   END IF;
+  -- Test mode (049): the webhook path reads these on every send.
+  IF (
+    SELECT COUNT(*) FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND (table_name, column_name) IN (
+        ('shopify_configs', 'test_mode'),
+        ('shopify_configs', 'test_phones'),
+        ('shopify_notifications', 'is_test')
+      )
+  ) <> 3 THEN
+    RAISE EXCEPTION
+      'shopify test mode columns are missing — migration 049 did not apply';
+  END IF;
 
   -- FlexyPe abandoned checkouts (047). Read by the FlexyPe webhook
   -- through an untyped client.
