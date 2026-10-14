@@ -550,3 +550,80 @@ describe("triggerMatches — keyword_match", () => {
     expect(on(automation({ keywords: ["hi"], match_type: "word" }), "")).toBe(false);
   });
 });
+
+describe("contact variables in send steps", () => {
+  function sendStep(step_type: string, step_config: Record<string, unknown>) {
+    return {
+      id: "s1",
+      automation_id: "a1",
+      step_type,
+      position: 0,
+      parent_step_id: null,
+      step_config,
+    };
+  }
+
+  async function run() {
+    await runAutomationsForTrigger({
+      accountId: ACCOUNT,
+      triggerType: "new_message_received",
+      contactId: "c1",
+      context: { conversation_id: "conv1" },
+    });
+  }
+
+  it("fills {{contact.first_name}} in a text message", async () => {
+    const { engineSendText } = await import("./meta-send");
+    vi.mocked(engineSendText).mockClear();
+    // The contacts read serves both the ownership guard and the
+    // variable lookup in this mock.
+    h.state.owned = { id: "c1", name: "Dinesh Kumar" } as { id: string };
+    h.state.automations = [automationWithUpdateStep()];
+    h.state.steps = [
+      sendStep("send_message", { text: "Hi {{ contact.first_name | there }}!" }),
+    ];
+
+    await run();
+
+    expect(vi.mocked(engineSendText).mock.calls[0][0]).toMatchObject({
+      text: "Hi Dinesh!",
+    });
+  });
+
+  it("uses the fallback when the contact has no name", async () => {
+    const { engineSendText } = await import("./meta-send");
+    vi.mocked(engineSendText).mockClear();
+    h.state.owned = { id: "c1" };
+    h.state.automations = [automationWithUpdateStep()];
+    h.state.steps = [
+      sendStep("send_message", { text: "Hi {{contact.first_name | there}}!" }),
+    ];
+
+    await run();
+
+    expect(vi.mocked(engineSendText).mock.calls[0][0]).toMatchObject({
+      text: "Hi there!",
+    });
+  });
+
+  it("fills placeholders in template variables, in {{n}} order", async () => {
+    const { engineSendTemplate } = await import("./meta-send");
+    vi.mocked(engineSendTemplate).mockClear();
+    h.state.owned = { id: "c1", name: "Dinesh Kumar" } as { id: string };
+    h.state.automations = [automationWithUpdateStep()];
+    h.state.steps = [
+      sendStep("send_template", {
+        template_name: "welcome",
+        language: "en",
+        variables: { "2": "Estelle Luxe", "1": "{{contact.name}}" },
+      }),
+    ];
+
+    await run();
+
+    expect(vi.mocked(engineSendTemplate).mock.calls[0][0]).toMatchObject({
+      templateName: "welcome",
+      params: ["Dinesh Kumar", "Estelle Luxe"],
+    });
+  });
+});
