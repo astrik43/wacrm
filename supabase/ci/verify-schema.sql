@@ -149,6 +149,17 @@ BEGIN
       'shopify_event_templates variant index is missing — migration 046 did not apply';
   END IF;
 
+  -- FlexyPe abandoned checkouts (047). Read by the FlexyPe webhook
+  -- through an untyped client.
+  IF (
+    SELECT COUNT(*) FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'shopify_configs'
+      AND column_name IN ('flexype_secret', 'flexype_last_webhook_at')
+  ) <> 2 THEN
+    RAISE EXCEPTION
+      'shopify_configs.flexype_* columns are missing — migration 047 did not apply';
+  END IF;
+
   RAISE NOTICE 'schema verification passed';
 END
 $$;

@@ -45,6 +45,8 @@ function config(overrides: Partial<ShopifyConfigRow> = {}): ShopifyConfigRow {
     api_access_token: 'enc:cached-token',
     api_token_expires_at: new Date(Date.now() + 3_600_000).toISOString(),
     api_scopes: 'read_products',
+    flexype_secret: null,
+    flexype_last_webhook_at: null,
     ...overrides,
   };
 }

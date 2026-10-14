@@ -66,6 +66,15 @@ and when the shipment is out for delivery or delivered.
 > (new columns on four `shopify_*` tables, a new `shopify_checkouts`
 > table, and the unique index on `shopify_event_templates` now includes
 > the payment variant). Apply it **before** deploying this version.
+- **FlexyPe abandoned checkouts.** Stores that check out through
+  FlexyPe can connect it under Settings → Shopify: FlexyPe's Abandoned
+  Checkout Recovery webhook feeds the same three cart reminders, with
+  the product picture and the link back to the FlexyPe checkout.
+  Reminders stop when the order arrives (matched by FlexyPe's session
+  id or the phone number).
+
+> **Migration required:** apply `supabase/migrations/047_flexype_abandoned_checkout.sql`
+> (two new columns on `shopify_configs`).
 
 ## [0.8.1] — 2026-07-10
 
