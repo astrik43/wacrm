@@ -365,6 +365,7 @@ export interface MessageTemplate {
   submission_error?: string;
   last_submitted_at?: string;
   created_at: string;
+  updated_at?: string;
 }
 
 export interface Pipeline {
