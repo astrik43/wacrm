@@ -1,11 +1,15 @@
 // ============================================================
 // /api/shopify/events
 //
-//   GET — every update with its switch, template, delay and variable
-//         mapping (defaults for ones never configured). Order and
-//         shipment updates come once per payment variant (all orders,
-//         COD, prepaid); cart reminders only as "all".
-//   PUT — save one update's settings for one variant (admin+).
+//   GET    — every update with its switch, template, delay and
+//            variable mapping (defaults for ones never configured).
+//            Order and shipment updates come once per payment variant
+//            (all orders, COD, prepaid); cart reminders only as "all".
+//            Each variant has its first message (step 0) and any
+//            follow-up messages saved for it (steps 1..4).
+//   PUT    — save one message of one update and variant (admin+).
+//   DELETE — remove a follow-up message (admin+). Sends already
+//            waiting for it are cancelled by the cron.
 //
 // An update can only be switched ON with an APPROVED template whose
 // every placeholder is mapped — otherwise each order would be logged
@@ -27,9 +31,11 @@ import {
 import {
   MAX_DELAY_MINUTES,
   MIN_CART_DELAY_MINUTES,
+  MAX_FOLLOW_UPS,
   SHOPIFY_EVENTS,
   isCartEvent,
   isShopifyEvent,
+  isStep,
   isShopifyVariant,
   variantsForEvent,
 } from '@/lib/shopify/events';
@@ -40,11 +46,12 @@ import {
 import { resolveTemplateRow } from '@/lib/whatsapp/template-body';
 
 const COLUMNS =
-  'event, variant, is_enabled, template_name, template_language, variable_mapping, delay_minutes, updated_at';
+  'event, variant, step, is_enabled, template_name, template_language, variable_mapping, delay_minutes, updated_at';
 
 interface EventRow {
   event: string;
   variant: string;
+  step: number | null;
   delay_minutes: number | null;
   is_enabled: boolean;
   template_name: string | null;
@@ -69,27 +76,33 @@ export async function GET() {
       );
     }
 
-    const byKey = new Map(
-      ((data as EventRow[] | null) ?? []).map((row) => [
-        `${row.event}:${row.variant}`,
-        row,
-      ])
-    );
+    const rows = (data as EventRow[] | null) ?? [];
     const events = SHOPIFY_EVENTS.flatMap((event) =>
-      variantsForEvent(event).map((variant) => {
-        const row = byKey.get(`${event}:${variant}`);
-        return {
-          event,
-          variant,
-          is_enabled: row?.is_enabled ?? false,
-          template_name: row?.template_name ?? null,
-          template_language: row?.template_language ?? null,
-          variable_mapping: parseVariableMapping(row?.variable_mapping) ?? {
-            body: [],
-          },
-          delay_minutes: row?.delay_minutes ?? 0,
-          updated_at: row?.updated_at ?? null,
-        };
+      variantsForEvent(event).flatMap((variant) => {
+        const saved = rows.filter(
+          (r) => r.event === event && r.variant === variant
+        );
+        // The first message always shows, configured or not; follow-ups
+        // only once saved.
+        const steps = new Set([0, ...saved.map((r) => r.step ?? 0)]);
+        return [...steps]
+          .sort((a, b) => a - b)
+          .map((step) => {
+            const row = saved.find((r) => (r.step ?? 0) === step);
+            return {
+              event,
+              variant,
+              step,
+              is_enabled: row?.is_enabled ?? false,
+              template_name: row?.template_name ?? null,
+              template_language: row?.template_language ?? null,
+              variable_mapping: parseVariableMapping(row?.variable_mapping) ?? {
+                body: [],
+              },
+              delay_minutes: row?.delay_minutes ?? 0,
+              updated_at: row?.updated_at ?? null,
+            };
+          });
       })
     );
 
@@ -112,6 +125,7 @@ export async function PUT(request: Request) {
     const body = (await request.json().catch(() => null)) as {
       event?: unknown;
       variant?: unknown;
+      step?: unknown;
       delay_minutes?: unknown;
       is_enabled?: unknown;
       template_name?: unknown;
@@ -135,6 +149,14 @@ export async function PUT(request: Request) {
       );
     }
 
+    const step = body.step === undefined ? 0 : body.step;
+    if (!isStep(step)) {
+      return NextResponse.json(
+        { error: `'step' must be a whole number from 0 to ${MAX_FOLLOW_UPS}` },
+        { status: 400 }
+      );
+    }
+
     const delayMinutes =
       body.delay_minutes === undefined ? 0 : body.delay_minutes;
     if (
@@ -144,7 +166,9 @@ export async function PUT(request: Request) {
       delayMinutes > MAX_DELAY_MINUTES
     ) {
       return NextResponse.json(
-        { error: "'delay_minutes' must be a whole number from 0 to 43200" },
+        {
+          error: `'delay_minutes' must be a whole number from 0 to ${MAX_DELAY_MINUTES}`,
+        },
         { status: 400 }
       );
     }
@@ -220,6 +244,7 @@ export async function PUT(request: Request) {
           account_id: ctx.accountId,
           event,
           variant,
+          step,
           delay_minutes: delayMinutes,
           is_enabled: isEnabled,
           template_name: templateName,
@@ -230,7 +255,7 @@ export async function PUT(request: Request) {
             body: Array.from(mapping.body, (s) => s ?? null),
           },
         },
-        { onConflict: 'account_id,event,variant' }
+        { onConflict: 'account_id,event,variant,step' }
       )
       .select(COLUMNS)
       .single();
@@ -243,6 +268,58 @@ export async function PUT(request: Request) {
     }
 
     return NextResponse.json({ event: data });
+  } catch (err) {
+    return toErrorResponse(err);
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const ctx = await requireRole('admin');
+
+    const limit = checkRateLimit(
+      `admin:shopifyEvent:${ctx.userId}`,
+      RATE_LIMITS.adminAction
+    );
+    if (!limit.success) return rateLimitResponse(limit);
+
+    const params = new URL(request.url).searchParams;
+    const event = params.get('event');
+    const variant = params.get('variant') ?? 'all';
+    const step = Number(params.get('step'));
+    if (
+      !isShopifyEvent(event) ||
+      !isShopifyVariant(variant) ||
+      !variantsForEvent(event).includes(variant)
+    ) {
+      return NextResponse.json(
+        { error: "'event' and 'variant' must name a Shopify update" },
+        { status: 400 }
+      );
+    }
+    // The first message is switched off, not removed.
+    if (!isStep(step) || step === 0) {
+      return NextResponse.json(
+        { error: 'Only a follow-up message can be removed' },
+        { status: 400 }
+      );
+    }
+
+    const { error } = await ctx.supabase
+      .from('shopify_event_templates')
+      .delete()
+      .eq('account_id', ctx.accountId)
+      .eq('event', event)
+      .eq('variant', variant)
+      .eq('step', step);
+    if (error) {
+      console.error('[DELETE /api/shopify/events] delete error:', error);
+      return NextResponse.json(
+        { error: 'Failed to remove this message' },
+        { status: 500 }
+      );
+    }
+    return NextResponse.json({ removed: true });
   } catch (err) {
     return toErrorResponse(err);
   }

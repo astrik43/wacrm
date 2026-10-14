@@ -47,6 +47,7 @@ const TEMPLATE = {
 
 const EVENT_ROW = {
   variant: 'all',
+  step: 0,
   delay_minutes: 0,
   is_enabled: true,
   template_name: 'order_confirmed',
@@ -383,5 +384,66 @@ describe('notifyShopifyEvent — delay', () => {
     expect(await notifyShopifyEvent(fakeDb(state), 'acct-1', INPUT)).toEqual({
       status: 'duplicate',
     });
+  });
+});
+
+describe('notifyShopifyEvent — follow-up messages', () => {
+  const FEEDBACK_ROW = {
+    ...EVENT_ROW,
+    step: 1,
+    delay_minutes: 15 * 1440,
+    template_name: 'feedback_request',
+  };
+
+  it('sends the first message now and schedules the follow-up', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-13T10:00:00.000Z'));
+    try {
+      // Saved out of order on purpose: steps go first to last.
+      const state = freshState({ eventRow: [FEEDBACK_ROW, EVENT_ROW] });
+      const outcome = await notifyShopifyEvent(fakeDb(state), 'acct-1', INPUT);
+      expect(outcome).toEqual({ status: 'sent', messageId: 'msg-1' });
+      expect(state.claims).toHaveLength(2);
+      expect(state.claims[0]).toMatchObject({
+        step: 0,
+        dedupe_key: 'order_created:1001',
+        status: 'pending',
+      });
+      expect(state.claims[1]).toMatchObject({
+        step: 1,
+        dedupe_key: 'order_created:1001#1',
+        status: 'scheduled',
+        send_at: '2026-10-28T10:00:00.000Z',
+      });
+      expect(mocks.sendMessageToConversation).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('sends a follow-up even when the first message is off', async () => {
+    const state = freshState({
+      eventRow: [{ ...EVENT_ROW, is_enabled: false }, FEEDBACK_ROW],
+    });
+    const outcome = await notifyShopifyEvent(fakeDb(state), 'acct-1', INPUT);
+    expect(outcome).toMatchObject({ status: 'scheduled' });
+    expect(state.claims).toHaveLength(1);
+    expect(state.claims[0]).toMatchObject({ step: 1 });
+  });
+
+  it("uses only the payment mode's own messages when it has any", async () => {
+    const state = freshState({
+      eventRow: [
+        EVENT_ROW,
+        FEEDBACK_ROW,
+        { ...EVENT_ROW, variant: 'cod', template_name: 'cod_confirm' },
+      ],
+    });
+    await notifyShopifyEvent(fakeDb(state), 'acct-1', {
+      ...INPUT,
+      paymentMode: 'cod',
+    });
+    expect(state.claims).toHaveLength(1);
+    expect(state.claims[0]).toMatchObject({ variant: 'cod', step: 0 });
   });
 });

@@ -89,7 +89,7 @@ orders* or *Prepaid orders*, choose its template and switch it on.
 ## Delays
 
 Every update has **Wait before sending**. `0` sends as soon as Shopify
-reports the change; anything else (up to 30 days) holds the message as
+reports the change; anything else (up to 90 days) holds the message as
 **Scheduled** in Activity until its time.
 
 - A delayed message is not sent if the order is cancelled, or the
@@ -97,6 +97,25 @@ reports the change; anything else (up to 30 days) holds the message as
   **Cancelled** with the reason.
 - The template and mapping are read when the message is sent, so a
   correction applies to messages already waiting.
+
+## Follow-up messages
+
+Any update can send more than one template. In its dialog, **Messages**
+lists the *First message* and any follow-ups; **Add follow-up** adds
+another (up to four), each with its own template, mapping, delay and
+switch. For example, on **Delivered**: the first message at `0`, and a
+feedback request at `15 days`.
+
+- Every delay counts from the update itself, not from the previous
+  message. Use 15 and 30 days for two follow-ups, not 15 and 15.
+- Follow-ups belong to a variant. A COD order uses the COD messages
+  when any of them is switched on, otherwise the *All orders* ones —
+  the two lists are never mixed.
+- A follow-up obeys the same rules as a delayed message: it is not sent
+  if the order is cancelled (or, for a cart, the customer orders), and
+  removing it cancels the ones already waiting.
+- A follow-up applies to updates that happen after it is saved;
+  orders already delivered don't get it retroactively.
 
 > **Delays need a scheduler.** Nothing inside wacrm runs on a timer.
 > Point an external scheduler at `GET /api/shopify/cron` **once a
