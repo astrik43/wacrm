@@ -538,6 +538,101 @@ export function ShopifySettings() {
         </CardContent>
       </Card>
 
+      {/* ---- Testing mode ---------------------------------------- */}
+      {config && canEditSettings && (
+        <Card
+          className={
+            config.test_mode ? 'border-amber-500/50 bg-amber-500/5' : undefined
+          }
+        >
+          <CardContent className="space-y-4 p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-foreground flex items-center gap-2 text-sm font-medium">
+                  {t('testModeTitle')}
+                  <Badge
+                    className={`text-[10px] tracking-wide uppercase ${
+                      config.test_mode
+                        ? 'border-amber-500/40 bg-amber-500/15 text-amber-700 dark:text-amber-300'
+                        : 'border-border bg-muted text-muted-foreground'
+                    }`}
+                  >
+                    {config.test_mode ? t('testModeStateOn') : t('testModeStateOff')}
+                  </Badge>
+                </p>
+                <p className="text-muted-foreground mt-1 text-xs">
+                  {config.test_mode ? t('testModeOnDesc') : t('testModeDesc')}
+                </p>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant={config.test_mode ? 'outline' : 'default'}
+                disabled={saving}
+                onClick={() => handleTestMode(!config.test_mode)}
+                className="shrink-0"
+              >
+                {config.test_mode ? t('testModeTurnOff') : t('testModeTurnOn')}
+              </Button>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-muted-foreground">{t('testPhonesLabel')}</Label>
+              {testPhones.map((phone, i) => (
+                <div key={i} className="flex gap-2">
+                  <Input
+                    id={`shopify-test-phone-${i}`}
+                    inputMode="tel"
+                    value={phone}
+                    placeholder="+91 98765 43210"
+                    onChange={(e) =>
+                      setTestPhones((prev) =>
+                        prev.map((p, j) => (j === i ? e.target.value : p))
+                      )
+                    }
+                  />
+                  {testPhones.length > 1 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      aria-label={t('testPhoneRemove')}
+                      onClick={() =>
+                        setTestPhones((prev) => prev.filter((_, j) => j !== i))
+                      }
+                    >
+                      <X className="size-4" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+              <div className="flex flex-wrap gap-2">
+                {testPhones.length < MAX_TEST_PHONES && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setTestPhones((prev) => [...prev, ''])}
+                  >
+                    <Plus className="size-4" />
+                    {t('testPhoneAdd')}
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={saving}
+                  onClick={handleSaveTestPhones}
+                >
+                  {t('testPhonesSave')}
+                </Button>
+              </div>
+              <p className="text-muted-foreground text-xs">{t('testPhonesHint')}</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* ---- Product images -------------------------------------- */}
       {config && canEditSettings && (
         <Card>
@@ -733,88 +828,6 @@ export function ShopifySettings() {
                   {t('flexypeTurnOn')}
                 </Button>
               )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* ---- Testing mode ---------------------------------------- */}
-      {config && canEditSettings && (
-        <Card
-          className={
-            config.test_mode ? 'border-amber-500/50 bg-amber-500/5' : undefined
-          }
-        >
-          <CardContent className="space-y-4 p-4">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-foreground text-sm font-medium">
-                  {t('testModeTitle')}
-                </p>
-                <p className="text-muted-foreground mt-1 text-xs">
-                  {config.test_mode ? t('testModeOnDesc') : t('testModeDesc')}
-                </p>
-              </div>
-              <Switch
-                checked={config.test_mode}
-                disabled={saving}
-                onCheckedChange={handleTestMode}
-                aria-label={t('testModeTitle')}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-muted-foreground">{t('testPhonesLabel')}</Label>
-              {testPhones.map((phone, i) => (
-                <div key={i} className="flex gap-2">
-                  <Input
-                    id={`shopify-test-phone-${i}`}
-                    inputMode="tel"
-                    value={phone}
-                    placeholder="+91 98765 43210"
-                    onChange={(e) =>
-                      setTestPhones((prev) =>
-                        prev.map((p, j) => (j === i ? e.target.value : p))
-                      )
-                    }
-                  />
-                  {testPhones.length > 1 && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      aria-label={t('testPhoneRemove')}
-                      onClick={() =>
-                        setTestPhones((prev) => prev.filter((_, j) => j !== i))
-                      }
-                    >
-                      <X className="size-4" />
-                    </Button>
-                  )}
-                </div>
-              ))}
-              <div className="flex flex-wrap gap-2">
-                {testPhones.length < MAX_TEST_PHONES && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setTestPhones((prev) => [...prev, ''])}
-                  >
-                    <Plus className="size-4" />
-                    {t('testPhoneAdd')}
-                  </Button>
-                )}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={saving}
-                  onClick={handleSaveTestPhones}
-                >
-                  {t('testPhonesSave')}
-                </Button>
-              </div>
-              <p className="text-muted-foreground text-xs">{t('testPhonesHint')}</p>
             </div>
           </CardContent>
         </Card>
