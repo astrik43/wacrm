@@ -24,7 +24,7 @@ vi.mock('@/lib/rate-limit', () => ({
   RATE_LIMITS: { adminAction: {} },
 }));
 
-import { GET, PUT } from './route';
+import { DELETE, GET, PUT } from './route';
 
 const TEMPLATE = {
   id: 'tpl-1',
@@ -46,13 +46,21 @@ const MAPPING = {
 
 let rows: Record<string, unknown>[];
 let upserts: Record<string, unknown>[];
+let deletes: [string, unknown][][];
 
 function fakeSupabase() {
   return {
     from() {
       const builder: Record<string, unknown> = {
         select: () => builder,
-        eq: () => builder,
+        eq: (column: string, value: unknown) => {
+          deletes.at(-1)?.push([column, value]);
+          return builder;
+        },
+        delete: () => {
+          deletes.push([]);
+          return builder;
+        },
         upsert: (row: Record<string, unknown>) => {
           upserts.push(row);
           return builder;
@@ -78,6 +86,7 @@ function put(body: unknown) {
 
 beforeEach(() => {
   rows = [];
+  deletes = [];
   upserts = [];
   vi.clearAllMocks();
   const ctx = { supabase: fakeSupabase(), accountId: 'acct-1', userId: 'u-1', role: 'admin' };
@@ -181,6 +190,7 @@ describe('/api/shopify/events', () => {
       account_id: 'acct-1',
       event: 'order_created',
       variant: 'all',
+      step: 0,
       delay_minutes: 0,
       is_enabled: true,
       template_name: 'order_confirmed',
@@ -212,7 +222,7 @@ describe('/api/shopify/events', () => {
     expect((await put({ ...base, variant: 'upi' })).status).toBe(400);
     // A cart has no payment mode yet.
     expect((await put({ event: 'cart_reminder_1', variant: 'cod' })).status).toBe(400);
-    for (const delay_minutes of [-1, 1.5, 43201, '30']) {
+    for (const delay_minutes of [-1, 1.5, 129601, '30']) {
       expect((await put({ ...base, delay_minutes })).status).toBe(400);
     }
     expect(upserts).toEqual([]);
@@ -239,5 +249,76 @@ describe('/api/shopify/events', () => {
       variant: 'all',
       delay_minutes: 30,
     });
+  });
+
+  it('GET lists saved follow-ups after the first message', async () => {
+    rows = [
+      {
+        event: 'delivered',
+        variant: 'all',
+        step: 2,
+        is_enabled: true,
+        template_name: 'feedback',
+        delay_minutes: 21600,
+        variable_mapping: { body: [] },
+      },
+    ];
+    const body = await (await GET()).json();
+    const delivered = body.events.filter(
+      (e: { event: string; variant: string }) =>
+        e.event === 'delivered' && e.variant === 'all'
+    );
+    expect(delivered.map((e: { step: number }) => e.step)).toEqual([0, 2]);
+    expect(delivered[1]).toMatchObject({
+      template_name: 'feedback',
+      delay_minutes: 21600,
+    });
+  });
+
+  it('PUT saves a follow-up as its own step, up to 90 days later', async () => {
+    const response = await put({
+      event: 'delivered',
+      step: 1,
+      delay_minutes: 129600,
+      is_enabled: true,
+      template_name: 'order_confirmed',
+      template_language: 'en',
+      variable_mapping: MAPPING,
+    });
+    expect(response.status).toBe(200);
+    expect(upserts[0]).toMatchObject({ event: 'delivered', step: 1 });
+
+    for (const step of [-1, 5, 1.5, '1']) {
+      expect((await put({ event: 'delivered', step })).status).toBe(400);
+    }
+    expect(upserts).toHaveLength(1);
+  });
+
+  it('DELETE removes a follow-up but never the first message', async () => {
+    const del = (qs: string) =>
+      DELETE(
+        new Request(`http://localhost/api/shopify/events?${qs}`, {
+          method: 'DELETE',
+        })
+      );
+    expect((await del('event=delivered&variant=all&step=1')).status).toBe(200);
+    expect(deletes).toEqual([
+      [
+        ['account_id', 'acct-1'],
+        ['event', 'delivered'],
+        ['variant', 'all'],
+        ['step', 1],
+      ],
+    ]);
+
+    for (const qs of [
+      'event=delivered&variant=all&step=0',
+      'event=delivered&variant=all',
+      'event=nope&variant=all&step=1',
+      'event=cart_reminder_1&variant=cod&step=1',
+    ]) {
+      expect((await del(qs)).status).toBe(400);
+    }
+    expect(deletes).toHaveLength(1);
   });
 });

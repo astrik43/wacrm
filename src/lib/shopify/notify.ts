@@ -1,10 +1,14 @@
 // ============================================================
 // Send one Shopify-triggered WhatsApp notification, exactly once.
 //
+// An update can send several messages ("steps"): the first, plus
+// follow-ups such as a feedback request days after delivery. Each step
+// goes through the same path with its own dedupe key and delay.
+//
 // Order of operations matters:
-//   1. Is the event switched on? Which template applies depends on
-//      how the order is paid: the COD / prepaid row if that one is on,
-//      otherwise the "all orders" row. Nothing on → do nothing and
+//   1. Is the event switched on? Which messages apply depends on how
+//      the order is paid: the COD / prepaid ones if any of those is on,
+//      otherwise the "all orders" ones. Nothing on → do nothing and
 //      leave no row.
 //   2. CLAIM the (event, order/shipment/cart) in
 //      `shopify_notifications` before sending. The unique dedupe key
@@ -30,7 +34,12 @@ import {
   SendMessageError,
 } from '@/lib/whatsapp/send-message';
 import { resolveTemplateRow } from '@/lib/whatsapp/template-body';
-import type { PaymentMode, ShopifyEvent, ShopifyVariant } from './events';
+import {
+  stepDedupeKey,
+  type PaymentMode,
+  type ShopifyEvent,
+  type ShopifyVariant,
+} from './events';
 import type { ShopifyFields } from './order-fields';
 import { parseVariableMapping, resolveSendParams } from './variable-mapping';
 
@@ -69,6 +78,7 @@ export interface NotifyPayload {
 
 export interface EventTemplateRow {
   variant: ShopifyVariant;
+  step: number;
   is_enabled: boolean;
   template_name: string | null;
   template_language: string | null;
@@ -77,7 +87,7 @@ export interface EventTemplateRow {
 }
 
 const EVENT_COLUMNS =
-  'variant, is_enabled, template_name, template_language, variable_mapping, delay_minutes';
+  'variant, step, is_enabled, template_name, template_language, variable_mapping, delay_minutes';
 const MAX_REASON_LEN = 500;
 
 async function finish(
@@ -95,16 +105,16 @@ async function finish(
 }
 
 /**
- * The template settings that apply to this event for this payment
- * mode: the mode's own row when it is switched on, else "all orders".
- * `row` is null when nothing is switched on.
+ * The messages this event sends for this payment mode, first step
+ * first: the mode's own ones when any of them is switched on, else the
+ * "all orders" ones. Empty when nothing is switched on.
  */
-export async function pickEventTemplate(
+export async function pickEventSteps(
   db: SupabaseClient,
   accountId: string,
   event: ShopifyEvent,
   paymentMode: PaymentMode | null
-): Promise<{ row: EventTemplateRow | null; error: boolean }> {
+): Promise<{ rows: EventTemplateRow[]; error: boolean }> {
   const { data, error } = await db
     .from('shopify_event_templates')
     .select(EVENT_COLUMNS)
@@ -112,16 +122,17 @@ export async function pickEventTemplate(
     .eq('event', event);
   if (error) {
     console.error('[shopify] event template lookup failed:', error.message);
-    return { row: null, error: true };
+    return { rows: [], error: true };
   }
   const usable = ((data as EventTemplateRow[] | null) ?? []).filter(
     (r) => r.is_enabled && r.template_name
   );
-  const row =
-    (paymentMode && usable.find((r) => r.variant === paymentMode)) ||
-    usable.find((r) => r.variant === 'all') ||
-    null;
-  return { row, error: false };
+  const ofVariant = (variant: ShopifyVariant) =>
+    usable
+      .filter((r) => r.variant === variant)
+      .sort((a, b) => (a.step ?? 0) - (b.step ?? 0));
+  const own = paymentMode ? ofVariant(paymentMode) : [];
+  return { rows: own.length > 0 ? own : ofVariant('all'), error: false };
 }
 
 /**
@@ -225,6 +236,11 @@ export async function deliverNotification(
   }
 }
 
+/**
+ * Claim, and send or schedule, every message the event has switched
+ * on. Returns the first message's outcome — that is what the webhook
+ * log shows; follow-ups appear in Activity on their own rows.
+ */
 export async function notifyShopifyEvent(
   db: SupabaseClient,
   accountId: string,
@@ -233,15 +249,30 @@ export async function notifyShopifyEvent(
   const paymentMode = input.paymentMode ?? null;
 
   // 1. Switched on?
-  const picked = await pickEventTemplate(db, accountId, input.event, paymentMode);
+  const picked = await pickEventSteps(db, accountId, input.event, paymentMode);
   if (picked.error) {
     // Unknown whether the merchant wants this message — don't claim,
     // so a later delivery of the same change can still send it.
     return { status: 'failed', reason: 'db_error' };
   }
-  const eventRow = picked.row;
-  if (!eventRow) return { status: 'disabled' };
+  if (picked.rows.length === 0) return { status: 'disabled' };
 
+  let first: NotifyOutcome | null = null;
+  for (const eventRow of picked.rows) {
+    const outcome = await notifyStep(db, accountId, input, eventRow, paymentMode);
+    first ??= outcome;
+  }
+  return first ?? { status: 'disabled' };
+}
+
+async function notifyStep(
+  db: SupabaseClient,
+  accountId: string,
+  input: NotifyInput,
+  eventRow: EventTemplateRow,
+  paymentMode: PaymentMode | null
+): Promise<NotifyOutcome> {
+  const step = eventRow.step ?? 0;
   const delayMinutes = Math.max(0, Math.floor(eventRow.delay_minutes ?? 0));
   // Nothing to wait for when there is nobody to send to: claim it as
   // an ordinary row so it is recorded as skipped straight away.
@@ -261,11 +292,12 @@ export async function notifyShopifyEvent(
       {
         account_id: accountId,
         event: input.event,
+        step,
         shopify_order_id: input.orderId,
         shopify_fulfillment_id: input.fulfillmentId,
         shopify_checkout_id: input.checkoutId ?? null,
         order_name: input.orderName,
-        dedupe_key: input.dedupeKey,
+        dedupe_key: stepDedupeKey(input.dedupeKey, step),
         status: scheduled ? 'scheduled' : 'pending',
         variant: eventRow.variant,
         send_at: scheduled ? sendAt : null,

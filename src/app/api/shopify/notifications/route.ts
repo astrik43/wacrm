@@ -12,7 +12,7 @@ import { NextResponse } from 'next/server';
 import { getCurrentAccount, toErrorResponse } from '@/lib/auth/account';
 
 const COLUMNS =
-  'id, event, order_name, shopify_order_id, status, reason, variant, send_at, created_at';
+  'id, event, order_name, shopify_order_id, status, reason, variant, step, send_at, created_at';
 // A scheduled send this far past its time means nothing is calling
 // GET /api/shopify/cron.
 const OVERDUE_MS = 10 * 60 * 1000;

@@ -142,11 +142,23 @@ BEGIN
     RAISE EXCEPTION
       'shopify delay / COD columns are missing — migration 046 did not apply';
   END IF;
-  -- The settings upsert targets (account_id, event, variant); with only
-  -- the old two-column index PostgREST rejects every save.
-  IF to_regclass('public.shopify_event_templates_account_event_variant_key') IS NULL THEN
+  -- Follow-up messages (048). The settings upsert targets
+  -- (account_id, event, variant, step); without that exact index
+  -- PostgREST rejects every save.
+  IF (
+    SELECT COUNT(*) FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND (table_name, column_name) IN (
+        ('shopify_event_templates', 'step'),
+        ('shopify_notifications', 'step')
+      )
+  ) <> 2 THEN
     RAISE EXCEPTION
-      'shopify_event_templates variant index is missing — migration 046 did not apply';
+      'shopify step columns are missing — migration 048 did not apply';
+  END IF;
+  IF to_regclass('public.shopify_event_templates_account_event_variant_step_key') IS NULL THEN
+    RAISE EXCEPTION
+      'shopify_event_templates step index is missing — migration 048 did not apply';
   END IF;
 
   -- FlexyPe abandoned checkouts (047). Read by the FlexyPe webhook

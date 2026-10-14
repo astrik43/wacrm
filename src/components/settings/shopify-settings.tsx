@@ -73,6 +73,8 @@ interface ShopifyNotification {
   order_name: string | null;
   shopify_order_id: string | null;
   status: 'pending' | 'scheduled' | 'sent' | 'skipped' | 'failed' | 'cancelled';
+  /** 0 = the update's first message; 1.. = follow-ups. */
+  step?: number | null;
   reason: string | null;
   send_at: string | null;
   created_at: string;
@@ -130,6 +132,7 @@ export function ShopifySettings() {
   const [editing, setEditing] = useState<{
     event: ShopifyEvent;
     variant: ShopifyVariant;
+    step: number;
   } | null>(null);
   const [toggling, setToggling] = useState<string | null>(null);
   const [overdue, setOverdue] = useState(0);
@@ -258,10 +261,14 @@ export function ShopifySettings() {
     // Switching on needs a template and a complete mapping — open the
     // dialog instead of letting the server reject it.
     if (next && !setting.template_name) {
-      setEditing({ event: setting.event, variant: setting.variant });
+      setEditing({
+        event: setting.event,
+        variant: setting.variant,
+        step: setting.step,
+      });
       return;
     }
-    setToggling(`${setting.event}:${setting.variant}`);
+    setToggling(`${setting.event}:${setting.variant}:${setting.step}`);
     try {
       const res = await fetch('/api/shopify/events', {
         method: 'PUT',
@@ -275,7 +282,9 @@ export function ShopifySettings() {
       }
       setEvents((prev) =>
         prev.map((e) =>
-          e.event === setting.event && e.variant === setting.variant
+          e.event === setting.event &&
+          e.variant === setting.variant &&
+          e.step === setting.step
             ? { ...e, is_enabled: next }
             : e
         )
@@ -310,10 +319,10 @@ export function ShopifySettings() {
     );
   }
 
-  // One row per update; a COD / prepaid template that has been set up
-  // shows as its own sub-row.
+  // One row per update; a COD / prepaid template and every follow-up
+  // message that has been set up show as their own sub-rows.
   const visibleRows = events.filter(
-    (e) => e.variant === 'all' || e.template_name
+    (e) => (e.variant === 'all' && e.step === 0) || e.template_name
   );
   const groups = [
     {
@@ -697,16 +706,20 @@ export function ShopifySettings() {
             <CardContent className="p-0">
               <ul className="divide-border divide-y">
                 {group.rows.map((setting) => {
-                  const rowKey = `${setting.event}:${setting.variant}`;
-                  const label =
-                    setting.variant === 'all'
-                      ? t(`events.${setting.event}.label`)
-                      : `${t(`events.${setting.event}.label`)} · ${t(`variants.${setting.variant}`)}`;
+                  const rowKey = `${setting.event}:${setting.variant}:${setting.step}`;
+                  const label = [
+                    t(`events.${setting.event}.label`),
+                    setting.variant === 'all' ? null : t(`variants.${setting.variant}`),
+                    setting.step > 0 ? t('followUpN', { n: setting.step }) : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ');
+                  const isSubRow = setting.variant !== 'all' || setting.step > 0;
                   return (
                     <li
                       key={rowKey}
                       className={`flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:gap-4 ${
-                        setting.variant === 'all' ? '' : 'sm:pl-8'
+                        isSubRow ? 'sm:pl-8' : ''
                       }`}
                     >
                       <div className="min-w-0 flex-1">
@@ -729,6 +742,7 @@ export function ShopifySettings() {
                               setEditing({
                                 event: setting.event,
                                 variant: setting.variant,
+                                step: setting.step,
                               })
                             }
                           >
@@ -804,6 +818,7 @@ export function ShopifySettings() {
                           </span>
                           {' · '}
                           {t(`events.${n.event}.label`)}
+                          {n.step ? ` · ${t('followUpN', { n: n.step })}` : ''}
                         </p>
                         {n.reason && (
                           <p className="text-muted-foreground mt-0.5 text-xs break-words">
@@ -840,6 +855,7 @@ export function ShopifySettings() {
         <ShopifyEventDialog
           settings={events.filter((e) => e.event === editing.event)}
           initialVariant={editing.variant}
+          initialStep={editing.step}
           hasApiCredentials={config?.has_api_credentials ?? false}
           onOpenChange={(open) => {
             if (!open) setEditing(null);

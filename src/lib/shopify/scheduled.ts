@@ -13,7 +13,8 @@
 //      bought, or the update switched off since it was scheduled —
 //      those end as `cancelled` with the reason.
 //   3. Send with the template settings as they are NOW, so fixing a
-//      template or mapping applies to messages already waiting.
+//      template or mapping applies to messages already waiting. A
+//      follow-up whose step was removed since is cancelled.
 // ============================================================
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -21,7 +22,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { isCartEvent, isPaymentMode, isShopifyEvent } from './events';
 import {
   deliverNotification,
-  pickEventTemplate,
+  pickEventSteps,
   type NotifyOutcome,
   type NotifyPayload,
 } from './notify';
@@ -33,6 +34,7 @@ interface DueRow {
   id: string;
   account_id: string;
   event: string;
+  step: number | null;
   shopify_order_id: string | null;
   shopify_checkout_id: string | null;
   payload: Partial<NotifyPayload> | null;
@@ -125,7 +127,9 @@ export async function runDueNotifications(
 
   const { data, error } = await db
     .from('shopify_notifications')
-    .select('id, account_id, event, shopify_order_id, shopify_checkout_id, payload')
+    .select(
+      'id, account_id, event, step, shopify_order_id, shopify_checkout_id, payload'
+    )
     .eq('status', 'scheduled')
     .lte('send_at', now.toISOString())
     .order('send_at', { ascending: true })
@@ -166,7 +170,7 @@ export async function runDueNotifications(
         !isCartEvent(event) && isPaymentMode(payload.paymentMode)
           ? payload.paymentMode
           : null;
-      const picked = await pickEventTemplate(
+      const picked = await pickEventSteps(
         db,
         row.account_id,
         event,
@@ -181,7 +185,8 @@ export async function runDueNotifications(
         summary.failed++;
         continue;
       }
-      if (!picked.row) {
+      const stepRow = picked.rows.find((r) => (r.step ?? 0) === (row.step ?? 0));
+      if (!stepRow) {
         await cancel(db, row.id, 'event_disabled');
         summary.cancelled++;
         continue;
@@ -191,7 +196,7 @@ export async function runDueNotifications(
         db,
         row.account_id,
         row.id,
-        picked.row,
+        stepRow,
         {
           event,
           orderId: row.shopify_order_id,

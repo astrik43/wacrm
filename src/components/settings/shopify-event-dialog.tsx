@@ -9,11 +9,16 @@
 // An order or shipment update can have a different template for COD
 // and prepaid orders: "Applies to" switches between those variants,
 // each saved separately. Any variant can also wait before sending.
+//
+// Each variant can send more than one message: the first one plus up
+// to MAX_FOLLOW_UPS follow-ups (e.g. a feedback request 15 days after
+// delivery). Every message is saved on its own, with its own delay
+// counted from the update.
 // ============================================================
 
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Plus, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { Button } from '@/components/ui/button';
@@ -38,6 +43,7 @@ import { Switch } from '@/components/ui/switch';
 import { createClient } from '@/lib/supabase/client';
 import {
   MAX_DELAY_MINUTES,
+  MAX_FOLLOW_UPS,
   MIN_CART_DELAY_MINUTES,
   isCartEvent,
   variantsForEvent,
@@ -61,6 +67,8 @@ import type { MessageTemplate } from '@/types';
 export interface ShopifyEventSetting {
   event: ShopifyEvent;
   variant: ShopifyVariant;
+  /** 0 = the update's first message; 1.. = follow-ups. */
+  step: number;
   /** 0 = send as soon as Shopify reports the change. */
   delay_minutes: number;
   is_enabled: boolean;
@@ -70,6 +78,8 @@ export interface ShopifyEventSetting {
 }
 
 const DELAY_UNITS = { minutes: 1, hours: 60, days: 1440 } as const;
+/** A new follow-up starts at one day; feedback asks are usually later. */
+const DEFAULT_FOLLOW_UP_DELAY = 1440;
 type DelayUnit = keyof typeof DELAY_UNITS;
 
 /** The largest unit that expresses the delay as a whole number. */
@@ -126,6 +136,7 @@ function sampleFor(source: VariableSource | undefined): string {
 export function ShopifyEventDialog({
   settings,
   initialVariant,
+  initialStep = 0,
   hasApiCredentials,
   onOpenChange,
   onSaved,
@@ -133,6 +144,7 @@ export function ShopifyEventDialog({
   /** Every variant of the update being edited. */
   settings: ShopifyEventSetting[];
   initialVariant: ShopifyVariant;
+  initialStep?: number;
   /** Whether the store can look product pictures up (Shopify app set). */
   hasApiCredentials: boolean;
   onOpenChange: (open: boolean) => void;
@@ -147,10 +159,21 @@ export function ShopifyEventDialog({
   const [enabled, setEnabled] = useState(false);
   const [saving, setSaving] = useState(false);
   const [variant, setVariant] = useState<ShopifyVariant>(initialVariant);
+  const [step, setStep] = useState(initialStep);
+  // Follow-ups added in this dialog that haven't been saved yet.
+  const [drafts, setDrafts] = useState<ShopifyEventSetting[]>([]);
+  const [removing, setRemoving] = useState(false);
   const [delayAmount, setDelayAmount] = useState('0');
   const [delayUnit, setDelayUnit] = useState<DelayUnit>('minutes');
 
-  const setting = settings.find((s) => s.variant === variant) ?? null;
+  const all = useMemo(() => [...settings, ...drafts], [settings, drafts]);
+  const steps = all
+    .filter((s) => s.variant === variant)
+    .map((s) => s.step)
+    .sort((a, b) => a - b);
+  const setting =
+    all.find((s) => s.variant === variant && s.step === step) ?? null;
+  const isDraft = drafts.some((d) => d.variant === variant && d.step === step);
 
   // Load the form from whichever variant is selected.
   useEffect(() => {
@@ -254,6 +277,7 @@ export function ShopifyEventDialog({
         body: JSON.stringify({
           event,
           variant,
+          step,
           delay_minutes: delayMinutes,
           is_enabled: enabled,
           template_name: template?.name ?? null,
@@ -275,6 +299,58 @@ export function ShopifyEventDialog({
     } finally {
       setSaving(false);
     }
+  }
+
+  function addFollowUp() {
+    const next = Math.max(...steps) + 1;
+    if (next > MAX_FOLLOW_UPS) return;
+    setDrafts((prev) => [
+      ...prev,
+      {
+        event,
+        variant,
+        step: next,
+        delay_minutes: Math.max(DEFAULT_FOLLOW_UP_DELAY, MIN_CART_DELAY_MINUTES),
+        is_enabled: true,
+        template_name: null,
+        template_language: null,
+        variable_mapping: { body: [] },
+      },
+    ]);
+    setStep(next);
+  }
+
+  async function removeFollowUp() {
+    if (step === 0) return;
+    if (isDraft) {
+      setDrafts((prev) =>
+        prev.filter((d) => !(d.variant === variant && d.step === step))
+      );
+      setStep(0);
+      return;
+    }
+    setRemoving(true);
+    try {
+      const qs = new URLSearchParams({ event, variant, step: String(step) });
+      const res = await fetch(`/api/shopify/events?${qs}`, { method: 'DELETE' });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(payload.error || t('saveFailed'));
+        return;
+      }
+      toast.success(t('followUpRemoved'));
+      setStep(0);
+      onSaved();
+    } catch (err) {
+      console.error('[ShopifyEventDialog] remove error:', err);
+      toast.error(t('networkError'));
+    } finally {
+      setRemoving(false);
+    }
+  }
+
+  function stepLabel(n: number): string {
+    return n === 0 ? t('firstMessage') : t('followUpN', { n });
   }
 
   return (
@@ -302,7 +378,10 @@ export function ShopifyEventDialog({
                   value={variant}
                   onValueChange={(val) => {
                     const next = variants.find((v) => v === val);
-                    if (next) setVariant(next);
+                    if (next) {
+                      setVariant(next);
+                      setStep(0);
+                    }
                   }}
                 >
                   <SelectTrigger className="border-border bg-muted text-foreground w-full">
@@ -319,6 +398,30 @@ export function ShopifyEventDialog({
                 <p className="text-muted-foreground text-xs">{t('variantHint')}</p>
               </div>
             )}
+
+            <div className="space-y-1.5">
+              <Label className="text-muted-foreground">{t('messagesLabel')}</Label>
+              <div className="flex flex-wrap gap-2">
+                {steps.map((n) => (
+                  <Button
+                    key={n}
+                    type="button"
+                    size="sm"
+                    variant={n === step ? 'default' : 'outline'}
+                    onClick={() => setStep(n)}
+                  >
+                    {stepLabel(n)}
+                  </Button>
+                ))}
+                {steps.length <= MAX_FOLLOW_UPS && (
+                  <Button type="button" size="sm" variant="ghost" onClick={addFollowUp}>
+                    <Plus className="size-4" />
+                    {t('addFollowUp')}
+                  </Button>
+                )}
+              </div>
+              <p className="text-muted-foreground text-xs">{t('messagesHint')}</p>
+            </div>
 
             <div className="space-y-1.5">
               <Label className="text-muted-foreground">{t('templateLabel')}</Label>
@@ -513,14 +616,32 @@ export function ShopifyEventDialog({
               <p className="text-muted-foreground text-xs">
                 {isCartEvent(event)
                   ? t('delayHintCart', { min: MIN_CART_DELAY_MINUTES })
-                  : t('delayHint')}
+                  : step > 0
+                    ? t('delayHintFollowUp')
+                    : t('delayHint')}
               </p>
             </div>
 
             <div className="flex items-center justify-between gap-3">
-              <Label className="text-popover-foreground">{t('enableLabel')}</Label>
+              <Label className="text-popover-foreground">
+                {step === 0 ? t('enableLabel') : t('enableFollowUpLabel')}
+              </Label>
               <Switch checked={enabled} onCheckedChange={setEnabled} />
             </div>
+
+            {step > 0 && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={removing}
+                onClick={removeFollowUp}
+                className="text-destructive hover:text-destructive"
+              >
+                <Trash2 className="size-4" />
+                {t('removeFollowUp')}
+              </Button>
+            )}
           </div>
         )}
 

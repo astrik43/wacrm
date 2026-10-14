@@ -95,8 +95,29 @@ export function variantsForEvent(event: ShopifyEvent): readonly ShopifyVariant[]
   return isCartEvent(event) ? ['all'] : SHOPIFY_VARIANTS;
 }
 
-/** Longest delay the schedule accepts (30 days). */
-export const MAX_DELAY_MINUTES = 43200;
+/** Longest delay the schedule accepts (90 days). */
+export const MAX_DELAY_MINUTES = 129600;
+
+/**
+ * Every update can send more than one message: step 0 is the first,
+ * steps 1..MAX_FOLLOW_UPS are follow-ups (a feedback request some days
+ * after delivery, say). Each step's delay counts from the update.
+ */
+export const MAX_FOLLOW_UPS = 4;
+
+export function isStep(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= 0 &&
+    value <= MAX_FOLLOW_UPS
+  );
+}
+
+/** Dedupe key of one step; step 0 keeps the update's own key. */
+export function stepDedupeKey(dedupeKey: string, step: number): string {
+  return step === 0 ? dedupeKey : `${dedupeKey}#${step}`;
+}
 /**
  * A reminder sent the moment a checkout appears would reach someone
  * who is still typing their address.

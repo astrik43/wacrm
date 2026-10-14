@@ -5,12 +5,17 @@ const mocks = vi.hoisted(() => ({ deliver: vi.fn(), pick: vi.fn() }));
 
 vi.mock('./notify', () => ({
   deliverNotification: mocks.deliver,
-  pickEventTemplate: mocks.pick,
+  pickEventSteps: mocks.pick,
 }));
 
 import { runDueNotifications } from './scheduled';
 
-const EVENT_ROW = { variant: 'all', is_enabled: true, template_name: 'tpl' };
+const EVENT_ROW = {
+  variant: 'all',
+  step: 0,
+  is_enabled: true,
+  template_name: 'tpl',
+};
 
 const ORDER_ROW = {
   id: 'n-1',
@@ -116,7 +121,7 @@ function outcomeOf(state: FakeState, id: string) {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.spyOn(console, 'error').mockImplementation(() => {});
-  mocks.pick.mockResolvedValue({ row: EVENT_ROW, error: false });
+  mocks.pick.mockResolvedValue({ rows: [EVENT_ROW], error: false });
   mocks.deliver.mockResolvedValue({ status: 'sent', messageId: 'm' });
 });
 
@@ -174,7 +179,7 @@ describe('runDueNotifications', () => {
   });
 
   it('cancels an update that was switched off meanwhile', async () => {
-    mocks.pick.mockResolvedValue({ row: null, error: false });
+    mocks.pick.mockResolvedValue({ rows: [], error: false });
     const state = freshState();
     expect((await runDueNotifications(fakeDb(state))).cancelled).toBe(1);
     expect(outcomeOf(state, 'n-1')).toEqual([
@@ -183,7 +188,7 @@ describe('runDueNotifications', () => {
   });
 
   it('puts an update back when the settings cannot be read', async () => {
-    mocks.pick.mockResolvedValue({ row: null, error: true });
+    mocks.pick.mockResolvedValue({ rows: [], error: true });
     const state = freshState();
     await runDueNotifications(fakeDb(state));
     expect(outcomeOf(state, 'n-1')).toEqual([{ status: 'scheduled' }]);
@@ -245,6 +250,25 @@ describe('runDueNotifications — cart reminders', () => {
     await runDueNotifications(fakeDb(state));
     expect(outcomeOf(state, 'n-2')).toEqual([
       { status: 'cancelled', reason: 'order_placed', payload: null },
+    ]);
+    expect(mocks.deliver).not.toHaveBeenCalled();
+  });
+});
+
+describe('runDueNotifications — follow-ups', () => {
+  it("sends a follow-up with its own step's settings", async () => {
+    const FOLLOW_UP = { ...EVENT_ROW, step: 1, template_name: 'feedback' };
+    mocks.pick.mockResolvedValue({ rows: [EVENT_ROW, FOLLOW_UP], error: false });
+    const state = freshState({ due: [{ ...ORDER_ROW, step: 1 }] });
+    expect((await runDueNotifications(fakeDb(state))).sent).toBe(1);
+    expect(mocks.deliver.mock.calls[0][3]).toBe(FOLLOW_UP);
+  });
+
+  it('cancels a follow-up that was removed meanwhile', async () => {
+    const state = freshState({ due: [{ ...ORDER_ROW, step: 2 }] });
+    expect((await runDueNotifications(fakeDb(state))).cancelled).toBe(1);
+    expect(outcomeOf(state, 'n-1')).toEqual([
+      { status: 'cancelled', reason: 'event_disabled', payload: null },
     ]);
     expect(mocks.deliver).not.toHaveBeenCalled();
   });

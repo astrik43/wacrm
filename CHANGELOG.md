@@ -76,6 +76,17 @@ and when the shipment is out for delivery or delivered.
 > **Migration required:** apply `supabase/migrations/047_flexype_abandoned_checkout.sql`
 > (two new columns on `shopify_configs`).
 
+- **Shopify: follow-up messages.** Every update (order created,
+  delivered, cart reminders, …) can send up to four more templates
+  after its first one, each with its own delay counted from the update —
+  for example a feedback request 15 days after delivery. Delays can now
+  be up to 90 days.
+
+> **Migration required:** apply `supabase/migrations/048_shopify_follow_ups.sql`
+> (a `step` column on `shopify_event_templates` and
+> `shopify_notifications`; the unique index on `shopify_event_templates`
+> now includes it). Apply it **before** deploying this version.
+
 ## [0.8.1] — 2026-07-10
 
 Fixes inbound chats fragmenting into multiple threads for the same
