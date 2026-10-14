@@ -328,6 +328,41 @@ describe('/api/shopify/config', () => {
     expect((await put({ flexype: 'yes' })).status).toBe(400);
   });
 
+  it('PUT turns testing mode on with up to five normalised numbers', async () => {
+    state.existing = ROW;
+    const response = await put({
+      test_mode: true,
+      test_phones: ['+91 90291 30001', '9029130001', '98765 43210', ''],
+    });
+    expect(response.status).toBe(200);
+    // Local numbers take the store's country code; duplicates collapse.
+    expect(state.updates[0]).toEqual({
+      test_mode: true,
+      test_phones: ['919029130001', '919876543210'],
+    });
+
+    for (const body of [
+      { test_mode: 'yes' },
+      { test_phones: '9029130001' },
+      { test_phones: ['1', '2', '3', '4', '5', '6'] },
+      { test_phones: ['not a phone'] },
+    ]) {
+      expect((await put(body)).status).toBe(400);
+    }
+    expect(state.updates).toHaveLength(1);
+  });
+
+  it('GET says testing mode is on to everyone, the numbers to admins only', async () => {
+    state.existing = { ...ROW, test_mode: true, test_phones: ['919029130001'] };
+    mocks.getCurrentAccount.mockResolvedValue(ctx(state, 'agent'));
+    const asAgent = (await (await GET()).json()).config;
+    expect(asAgent).toMatchObject({ test_mode: true, test_phones: [] });
+
+    mocks.getCurrentAccount.mockResolvedValue(ctx(state, 'admin'));
+    const asAdmin = (await (await GET()).json()).config;
+    expect(asAdmin.test_phones).toEqual(['919029130001']);
+  });
+
   it('GET shows the FlexyPe URL and secret to admins only', async () => {
     state.existing = {
       ...ROW,

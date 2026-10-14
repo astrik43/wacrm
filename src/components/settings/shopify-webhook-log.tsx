@@ -48,6 +48,7 @@ const KNOWN_REASONS = [
   'order_placed',
   'checkout_completed',
   'event_disabled',
+  'test_mode',
 ];
 
 /** Human text for a notification's skip / failure reason code. */
@@ -78,6 +79,7 @@ const KNOWN_DETAILS = [
   'no_phone',
   'payload_too_large_to_store',
   'test_event',
+  'test_mode',
 ];
 
 interface Outcome {

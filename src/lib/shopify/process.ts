@@ -50,6 +50,7 @@ import {
 } from './order-fields';
 import { notifyShopifyEvent, type NotifyOutcome } from './notify';
 import { pickOrderPhone } from './phone';
+import { orderRefOf } from './webhook-log';
 
 type Json = Record<string, unknown>;
 
@@ -76,7 +77,8 @@ export interface ProcessResult {
     | 'no_change'
     | 'order_cancelled'
     | 'checkout_completed'
-    | 'no_phone';
+    | 'no_phone'
+    | 'test_mode';
   outcomes: ProcessOutcome[];
 }
 
@@ -446,6 +448,9 @@ export async function processFlexypeCheckout(
 ): Promise<ProcessResult> {
   const accountId = config.account_id;
   const orderRef = cart.customerName || cart.phone || cart.checkoutId;
+  if (!allowedInTestMode(config, cart.phone)) {
+    return { orderRef, note: 'test_mode', outcomes: [] };
+  }
   const fields = { ...cart.fields };
   // FlexyPe normally sends the picture; fall back to Shopify's.
   if (!fields.product_image_url) {
@@ -608,6 +613,40 @@ async function handleFulfillment(
   return { orderRef: orderName ?? fallbackRef, outcomes };
 }
 
+/** Whether test mode lets a delivery for this phone through. */
+export function allowedInTestMode(
+  config: Pick<ShopifyConfigRow, 'test_mode' | 'test_phones'>,
+  phone: string | null
+): boolean {
+  if (!config.test_mode) return true;
+  return Boolean(phone && (config.test_phones ?? []).includes(phone));
+}
+
+/**
+ * The customer phone a delivery is about, for the test-mode check. A
+ * shipment is matched through its stored order (whose phone is what
+ * gets messaged), falling back to the shipping address phone.
+ */
+async function deliveryPhone(
+  db: SupabaseClient,
+  config: ShopifyConfigRow,
+  topic: ShopifyTopic,
+  body: Json
+): Promise<string | null> {
+  if (topic.startsWith('fulfillments/')) {
+    const orderId = idOf(body.order_id);
+    const order = orderId ? await loadOrder(db, config.account_id, orderId) : null;
+    return (
+      order?.phone ??
+      pickOrderPhone(
+        [text(obj(body.destination)?.phone)],
+        config.default_country_code
+      )
+    );
+  }
+  return orderPhone(body, config.default_country_code);
+}
+
 export async function processShopifyWebhook(
   db: SupabaseClient,
   config: ShopifyConfigRow,
@@ -617,6 +656,15 @@ export async function processShopifyWebhook(
 ): Promise<ProcessResult> {
   const body = obj(payload);
   if (!body) return { orderRef: null, note: 'invalid_payload', outcomes: [] };
+
+  // Test mode: a delivery about anyone but a test number is dropped
+  // before anything is stored or scheduled.
+  if (config.test_mode) {
+    const phone = await deliveryPhone(db, config, topic, body);
+    if (!allowedInTestMode(config, phone)) {
+      return { orderRef: orderRefOf(body), note: 'test_mode', outcomes: [] };
+    }
+  }
 
   if (topic === 'orders/create' || topic === 'orders/cancelled') {
     return handleOrder(db, config, topic, body, webhookId);

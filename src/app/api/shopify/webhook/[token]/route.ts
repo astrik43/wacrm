@@ -148,7 +148,8 @@ export async function POST(
         webhookId
       );
       await finishWebhookEvent(db, logId, {
-        status: 'processed',
+        // Test mode drops deliveries for anyone but the test numbers.
+        status: result.note === 'test_mode' ? 'ignored' : 'processed',
         detail: result.note ?? null,
         order_ref: result.orderRef,
         outcome: result.outcomes,

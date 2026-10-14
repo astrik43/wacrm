@@ -87,6 +87,17 @@ and when the shipment is out for delivery or delivered.
 > `shopify_notifications`; the unique index on `shopify_event_templates`
 > now includes it). Apply it **before** deploying this version.
 
+- **Shopify: testing mode and Send test.** Testing mode replaces Pause:
+  with up to five test numbers, webhooks about anyone else are ignored
+  (nothing stored or sent), while test numbers run the full flow. Each
+  update's dialog gets **Send test**, which sends the message being
+  edited to a chosen number immediately, using the latest order's
+  values.
+
+> **Migration required:** apply `supabase/migrations/049_shopify_test_mode.sql`
+> (`test_mode` and `test_phones` on `shopify_configs`, `is_test` on
+> `shopify_notifications`). Apply it **before** deploying this version.
+
 ## [0.8.1] — 2026-07-10
 
 Fixes inbound chats fragmenting into multiple threads for the same

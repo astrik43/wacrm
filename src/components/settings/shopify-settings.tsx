@@ -20,7 +20,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Copy, Loader2, RefreshCw, ShoppingBag } from 'lucide-react';
+import { Copy, Loader2, Plus, RefreshCw, ShoppingBag, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { Badge } from '@/components/ui/badge';
@@ -44,11 +44,23 @@ import {
   type ShopifyEventSetting,
 } from './shopify-event-dialog';
 
+const MAX_TEST_PHONES = 5;
+
+/** Saved test numbers as editable inputs, always at least one. */
+function phoneInputs(phones: string[] | null | undefined): string[] {
+  const list = (phones ?? []).map((p) => `+${p}`);
+  return list.length > 0 ? list : [''];
+}
+
 interface ShopifyConfig {
   id: string;
   shop_domain: string | null;
   default_country_code: string | null;
   is_active: boolean;
+  /** Only test_phones get messages (or are processed) while on. */
+  test_mode: boolean;
+  /** Empty for non-admins. */
+  test_phones: string[];
   last_webhook_at: string | null;
   /** Null for non-admins. */
   webhook_path: string | null;
@@ -129,6 +141,7 @@ export function ShopifySettings() {
   const [apiClientSecret, setApiClientSecret] = useState('');
   const [shopDomain, setShopDomain] = useState('');
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+  const [testPhones, setTestPhones] = useState<string[]>(['']);
   const [editing, setEditing] = useState<{
     event: ShopifyEvent;
     variant: ShopifyVariant;
@@ -161,6 +174,7 @@ export function ShopifySettings() {
       setConfig(configData.config);
       setCountryCode(configData.config?.default_country_code ?? '');
       setApiClientId(configData.config?.api_client_id ?? '');
+      setTestPhones(phoneInputs(configData.config?.test_phones));
       setEvents(eventsData.events);
       setActivity(activityData.notifications);
       setOverdue(activityData.overdue ?? 0);
@@ -194,6 +208,7 @@ export function ShopifySettings() {
       setConfig(payload.config as ShopifyConfig);
       setCountryCode((payload.config as ShopifyConfig).default_country_code ?? '');
       setApiClientId((payload.config as ShopifyConfig).api_client_id ?? '');
+      setTestPhones(phoneInputs((payload.config as ShopifyConfig).test_phones));
       setSecret('');
       setApiClientSecret('');
       return true;
@@ -217,6 +232,26 @@ export function ShopifySettings() {
       default_country_code: countryCode.trim() || null,
     });
     if (ok) toast.success(t('saved'));
+  }
+
+  async function handleTestMode(next: boolean) {
+    const phones = testPhones.map((p) => p.trim()).filter(Boolean);
+    if (next && phones.length === 0) {
+      toast.error(t('testModeNeedsPhone'));
+      return;
+    }
+    const ok = await putConfig({ test_mode: next, test_phones: phones });
+    if (ok) toast.success(next ? t('testModeOn') : t('testModeOff'));
+  }
+
+  async function handleSaveTestPhones() {
+    const phones = testPhones.map((p) => p.trim()).filter(Boolean);
+    if (config?.test_mode && phones.length === 0) {
+      toast.error(t('testModeNeedsPhone'));
+      return;
+    }
+    const ok = await putConfig({ test_phones: phones });
+    if (ok) toast.success(t('testPhonesSaved'));
   }
 
   async function handleSaveApi() {
@@ -363,9 +398,11 @@ export function ShopifySettings() {
             <Badge className="border-border bg-muted text-muted-foreground text-[10px] tracking-wide uppercase">
               {!config
                 ? t('statusNotConnected')
-                : config.is_active
-                  ? t('statusConnected')
-                  : t('statusPaused')}
+                : !config.is_active
+                  ? t('statusPaused')
+                  : config.test_mode
+                    ? t('statusTesting')
+                    : t('statusConnected')}
             </Badge>
             {config && (
               <span className="text-muted-foreground text-xs">
@@ -464,13 +501,17 @@ export function ShopifySettings() {
                 </Button>
                 {config && (
                   <>
-                    <Button
-                      variant="outline"
-                      disabled={saving}
-                      onClick={() => putConfig({ is_active: !config.is_active })}
-                    >
-                      {config.is_active ? t('pause') : t('resume')}
-                    </Button>
+                    {/* Pause is replaced by Testing mode; a store paused
+                        before that can still be resumed. */}
+                    {!config.is_active && (
+                      <Button
+                        variant="outline"
+                        disabled={saving}
+                        onClick={() => putConfig({ is_active: true })}
+                      >
+                        {t('resume')}
+                      </Button>
+                    )}
                     {confirmDisconnect ? (
                       <Button
                         variant="outline"
@@ -697,6 +738,88 @@ export function ShopifySettings() {
         </Card>
       )}
 
+      {/* ---- Testing mode ---------------------------------------- */}
+      {config && canEditSettings && (
+        <Card
+          className={
+            config.test_mode ? 'border-amber-500/50 bg-amber-500/5' : undefined
+          }
+        >
+          <CardContent className="space-y-4 p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-foreground text-sm font-medium">
+                  {t('testModeTitle')}
+                </p>
+                <p className="text-muted-foreground mt-1 text-xs">
+                  {config.test_mode ? t('testModeOnDesc') : t('testModeDesc')}
+                </p>
+              </div>
+              <Switch
+                checked={config.test_mode}
+                disabled={saving}
+                onCheckedChange={handleTestMode}
+                aria-label={t('testModeTitle')}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-muted-foreground">{t('testPhonesLabel')}</Label>
+              {testPhones.map((phone, i) => (
+                <div key={i} className="flex gap-2">
+                  <Input
+                    id={`shopify-test-phone-${i}`}
+                    inputMode="tel"
+                    value={phone}
+                    placeholder="+91 98765 43210"
+                    onChange={(e) =>
+                      setTestPhones((prev) =>
+                        prev.map((p, j) => (j === i ? e.target.value : p))
+                      )
+                    }
+                  />
+                  {testPhones.length > 1 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      aria-label={t('testPhoneRemove')}
+                      onClick={() =>
+                        setTestPhones((prev) => prev.filter((_, j) => j !== i))
+                      }
+                    >
+                      <X className="size-4" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+              <div className="flex flex-wrap gap-2">
+                {testPhones.length < MAX_TEST_PHONES && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setTestPhones((prev) => [...prev, ''])}
+                  >
+                    <Plus className="size-4" />
+                    {t('testPhoneAdd')}
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={saving}
+                  onClick={handleSaveTestPhones}
+                >
+                  {t('testPhonesSave')}
+                </Button>
+              </div>
+              <p className="text-muted-foreground text-xs">{t('testPhonesHint')}</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* ---- Order updates / cart reminders ---------------------- */}
       {groups.map((group) => (
         <div key={group.key}>
@@ -856,6 +979,7 @@ export function ShopifySettings() {
           settings={events.filter((e) => e.event === editing.event)}
           initialVariant={editing.variant}
           initialStep={editing.step}
+          testPhones={config?.test_phones ?? []}
           hasApiCredentials={config?.has_api_credentials ?? false}
           onOpenChange={(open) => {
             if (!open) setEditing(null);
