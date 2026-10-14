@@ -132,6 +132,10 @@ describe('parseFlexypeAbandonedCheckout', () => {
     body.payload.user.phone_with_dial_code = '+919876543210';
     const result = parseFlexypeAbandonedCheckout(body, '91');
     expect(result.ok && isFlexypeSample(result.checkout)).toBe(true);
+    // What the dashboard's Test button sends in practice.
+    body.payload.user.phone_with_dial_code = '+919845012345';
+    const button = parseFlexypeAbandonedCheckout(body, '91');
+    expect(button.ok && isFlexypeSample(button.checkout)).toBe(true);
     const real = parseFlexypeAbandonedCheckout(V2026, '91');
     expect(real.ok && isFlexypeSample(real.checkout)).toBe(false);
   });
