@@ -1034,6 +1034,16 @@
       "config": {
         "messageText": "Message text",
         "placeholderMessageText": "Hi! Thanks for reaching out…",
+        "imageLabel": "Image (optional)",
+        "captionText": "Caption",
+        "imageUpload": "Upload image",
+        "imageUrlPlaceholder": "…or paste an https image link",
+        "imageHint": "JPG or PNG, up to 5 MB. The message is sent as this picture with the text below as its caption.",
+        "imageRemove": "Remove image",
+        "imageWrongType": "Use a JPG or PNG image",
+        "imageTooLarge": "Images can be up to {max} MB",
+        "imageUploadFailed": "Could not upload the image",
+        "imageNeedsHttps": "The image link must start with https://",
         "tagLabel": "Tag",
         "modeLabel": "Mode",
         "modes": {

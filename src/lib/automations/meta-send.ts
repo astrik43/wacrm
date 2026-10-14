@@ -3,6 +3,7 @@ import type { InteractiveMessagePayload } from '@/lib/whatsapp/interactive'
 import {
   engineSendInteractiveButtons,
   engineSendInteractiveList,
+  engineSendMedia,
 } from '@/lib/flows/meta-send'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import {
@@ -59,6 +60,37 @@ export async function engineSendTemplate(
   args: SendTemplateArgs,
 ): Promise<{ whatsapp_message_id: string }> {
   return sendViaMeta({ ...args, kind: 'template' })
+}
+
+interface SendImageArgs {
+  accountId: string
+  userId: string
+  conversationId: string
+  contactId: string
+  /** Public https URL Meta fetches at send time. */
+  link: string
+  caption?: string
+}
+
+/**
+ * Send a picture (optionally captioned) from the automation engine.
+ * Delegates to the Flows media sender for the same reason as
+ * engineSendInteractive below: one implementation of the lookup,
+ * phone-variant retry and `messages` insert.
+ */
+export async function engineSendImage(
+  args: SendImageArgs,
+): Promise<{ whatsapp_message_id: string }> {
+  const { accountId, userId, conversationId, contactId, link, caption } = args
+  return engineSendMedia({
+    accountId,
+    userId,
+    conversationId,
+    contactId,
+    kind: 'image',
+    link,
+    caption,
+  })
 }
 
 interface SendInteractiveArgs {

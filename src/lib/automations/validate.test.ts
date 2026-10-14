@@ -42,6 +42,24 @@ describe("validateStepsForActivation", () => {
     ]);
   });
 
+  it("accepts a picture without text, but only an https one", () => {
+    expect(
+      validateStepsForActivation([
+        {
+          step_type: "send_message",
+          step_config: { text: "", image_url: "https://cdn.example.com/w.jpg" },
+        },
+      ]),
+    ).toEqual([]);
+    const issues = validateStepsForActivation([
+      {
+        step_type: "send_message",
+        step_config: { text: "", image_url: "http://insecure/w.jpg" },
+      },
+    ]);
+    expect(issues.map((i) => i.path)).toEqual(["steps[0].image_url"]);
+  });
+
   it("checks wait amount and unit boundaries", () => {
     const issues = validateStepsForActivation([
       { step_type: "wait", step_config: { amount: 0, unit: "minutes" } },

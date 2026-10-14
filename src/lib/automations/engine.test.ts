@@ -99,6 +99,7 @@ vi.mock("./admin-client", () => {
 });
 
 vi.mock("./meta-send", () => ({
+  engineSendImage: vi.fn(async () => ({ whatsapp_message_id: "img1" })),
   engineSendText: vi.fn(async () => ({ whatsapp_message_id: "m1" })),
   engineSendTemplate: vi.fn(async () => ({ whatsapp_message_id: "m1" })),
   engineSendInteractive: vi.fn(async () => ({ whatsapp_message_id: "m1" })),
@@ -625,5 +626,89 @@ describe("contact variables in send steps", () => {
       templateName: "welcome",
       params: ["Dinesh Kumar", "Estelle Luxe"],
     });
+  });
+});
+
+describe("send_message with an image", () => {
+  function imageStep(step_config: Record<string, unknown>) {
+    return {
+      id: "s1",
+      automation_id: "a1",
+      step_type: "send_message",
+      position: 0,
+      parent_step_id: null,
+      step_config,
+    };
+  }
+
+  async function run() {
+    await runAutomationsForTrigger({
+      accountId: ACCOUNT,
+      triggerType: "new_message_received",
+      contactId: "c1",
+      context: { conversation_id: "conv1" },
+    });
+  }
+
+  it("sends the picture with the filled-in text as its caption", async () => {
+    const { engineSendImage, engineSendText } = await import("./meta-send");
+    vi.mocked(engineSendImage).mockClear();
+    vi.mocked(engineSendText).mockClear();
+    h.state.owned = { id: "c1", name: "Dinesh Kumar" } as { id: string };
+    h.state.automations = [automationWithUpdateStep()];
+    h.state.steps = [
+      imageStep({
+        text: "Welcome {{contact.first_name}}!",
+        image_url: "https://cdn.example.com/welcome.jpg",
+      }),
+    ];
+
+    await run();
+
+    expect(vi.mocked(engineSendImage).mock.calls[0][0]).toMatchObject({
+      link: "https://cdn.example.com/welcome.jpg",
+      caption: "Welcome Dinesh!",
+      conversationId: "conv1",
+    });
+    expect(engineSendText).not.toHaveBeenCalled();
+  });
+
+  it("sends a picture alone when there is no text", async () => {
+    const { engineSendImage } = await import("./meta-send");
+    vi.mocked(engineSendImage).mockClear();
+    h.state.owned = { id: "c1" };
+    h.state.automations = [automationWithUpdateStep()];
+    h.state.steps = [imageStep({ text: "", image_url: "https://cdn.example.com/w.jpg" })];
+
+    await run();
+
+    expect(vi.mocked(engineSendImage).mock.calls[0][0].caption).toBeUndefined();
+  });
+
+  it("sends text longer than a caption allows as a second message", async () => {
+    const { engineSendImage, engineSendText } = await import("./meta-send");
+    vi.mocked(engineSendImage).mockClear();
+    vi.mocked(engineSendText).mockClear();
+    const long = "x".repeat(1100);
+    h.state.owned = { id: "c1" };
+    h.state.automations = [automationWithUpdateStep()];
+    h.state.steps = [imageStep({ text: long, image_url: "https://cdn.example.com/w.jpg" })];
+
+    await run();
+
+    expect(vi.mocked(engineSendImage).mock.calls[0][0].caption).toBeUndefined();
+    expect(vi.mocked(engineSendText).mock.calls[0][0]).toMatchObject({ text: long });
+  });
+
+  it("refuses a non-https picture", async () => {
+    const { engineSendImage } = await import("./meta-send");
+    vi.mocked(engineSendImage).mockClear();
+    h.state.owned = { id: "c1" };
+    h.state.automations = [automationWithUpdateStep()];
+    h.state.steps = [imageStep({ text: "hi", image_url: "http://insecure/x.jpg" })];
+
+    await run();
+
+    expect(engineSendImage).not.toHaveBeenCalled();
   });
 });
