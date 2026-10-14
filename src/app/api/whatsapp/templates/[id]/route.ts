@@ -4,6 +4,7 @@ import { decrypt } from '@/lib/whatsapp/encryption'
 import {
   deleteMessageTemplate,
   editMessageTemplate,
+  templateBelongsToWaba,
 } from '@/lib/whatsapp/meta-api'
 import {
   validateTemplatePayload,
@@ -22,7 +23,8 @@ import { ensureMediaHeaderHandle } from '@/lib/whatsapp/template-header-handle'
  *
  * DELETE — remove the template on Meta (when meta_template_id is set,
  *          scoped to a single language variant via hsm_id) AND drop
- *          the local row. Local-only rows skip the Meta call.
+ *          the local row. Local-only rows, and rows that belong to a
+ *          previously connected WABA, skip the Meta call.
  *
  * Initial submission (DRAFT → PENDING) lives at the sibling
  * /submit endpoint — keep this route narrowly about lifecycle of
@@ -291,16 +293,26 @@ export async function DELETE(
         )
       }
       const accessToken = decrypt(config.access_token)
-      try {
-        await deleteMessageTemplate({
-          wabaId: config.waba_id,
-          accessToken,
-          name: existing.name,
-          metaTemplateId: existing.meta_template_id,
-        })
-      } catch (e) {
-        const message = e instanceof Error ? e.message : 'Meta delete failed.'
-        return NextResponse.json({ error: message }, { status: 502 })
+      // A row left over from a previously connected WABA isn't on this
+      // one, and Meta rejects deleting it here — just drop it locally.
+      const onThisWaba = await templateBelongsToWaba({
+        wabaId: config.waba_id,
+        accessToken,
+        name: existing.name,
+        metaTemplateId: existing.meta_template_id,
+      })
+      if (onThisWaba !== false) {
+        try {
+          await deleteMessageTemplate({
+            wabaId: config.waba_id,
+            accessToken,
+            name: existing.name,
+            metaTemplateId: existing.meta_template_id,
+          })
+        } catch (e) {
+          const message = e instanceof Error ? e.message : 'Meta delete failed.'
+          return NextResponse.json({ error: message }, { status: 502 })
+        }
       }
     }
 

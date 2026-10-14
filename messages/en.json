@@ -1537,6 +1537,7 @@
       "toastSaveNewDry": "Template saved (dry-run — no Meta call)",
       "toastSyncCount": "Synced {total} {total, plural, =1 {template} other {templates}} from Meta",
       "toastSyncDetails": " ({inserted} new, {updated} updated)",
+      "toastSyncRemoved": " · removed {removed} no longer on this WhatsApp account",
       "toastSyncFailed": "Failed to sync: {preview}",
       "toastSyncTruncated": "Synced the first 2000 templates only — your account has more. Sync again to continue, or contact support if this persists.",
       "toastSyncError": "Failed to sync templates",

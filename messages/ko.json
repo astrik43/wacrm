@@ -1537,6 +1537,7 @@
       "toastSaveNewDry": "템플릿이 저장되었습니다 (드라이런 — Meta 호출 없음)",
       "toastSyncCount": "Meta에서 템플릿 {total}개를 동기화했습니다",
       "toastSyncDetails": " (신규 {inserted}개, 업데이트 {updated}개)",
+      "toastSyncRemoved": " · 이 WhatsApp 계정에 없는 {removed}개 삭제",
       "toastSyncFailed": "동기화 실패: {preview}",
       "toastSyncTruncated": "처음 2000개 템플릿만 동기화했습니다 — 계정에 더 많은 템플릿이 있습니다. 계속하려면 다시 동기화하거나, 문제가 지속되면 지원팀에 문의하세요.",
       "toastSyncError": "템플릿 동기화에 실패했습니다",
