@@ -3,6 +3,7 @@ import {
   deleteMessageTemplate,
   editMessageTemplate,
   submitMessageTemplate,
+  templateBelongsToWaba,
 } from './meta-api';
 
 // We mock fetch and assert on the request URL/method/body — these
@@ -220,5 +221,57 @@ describe('deleteMessageTemplate', () => {
         metaTemplateId: 'y',
       }),
     ).rejects.toThrow(/boom/);
+  });
+});
+
+describe('templateBelongsToWaba', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const args = {
+    wabaId: 'WABA1',
+    accessToken: 'tok',
+    name: 'order_update',
+    metaTemplateId: 'T1',
+  };
+
+  it('looks the name up on that WABA and matches the id', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(okResponse({ data: [{ id: 'T2' }, { id: 'T1' }] }));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(templateBelongsToWaba(args)).resolves.toBe(true);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toContain('/WABA1/message_templates?');
+    expect(url).toContain('name=order_update');
+    expect(init.headers.Authorization).toBe('Bearer tok');
+  });
+
+  it('is false when that WABA only has other templates by the name', async () => {
+    // e.g. the row was synced from a previously connected WABA, and
+    // the new one has its own copy with a different id.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(okResponse({ data: [{ id: 'T9' }] })),
+    );
+    await expect(templateBelongsToWaba(args)).resolves.toBe(false);
+  });
+
+  it('is false when the name is not on that WABA at all', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(okResponse({ data: [] })));
+    await expect(templateBelongsToWaba(args)).resolves.toBe(false);
+  });
+
+  it('is null when Meta cannot be asked', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(errorResponse(401, { error: { message: 'expired' } })),
+    );
+    await expect(templateBelongsToWaba(args)).resolves.toBeNull();
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
+    await expect(templateBelongsToWaba(args)).resolves.toBeNull();
   });
 });

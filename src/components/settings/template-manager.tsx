@@ -320,7 +320,8 @@ export function TemplateManager() {
         t('toastSyncCount', { total: data.total }) +
           (data.inserted || data.updated
             ? t('toastSyncDetails', { inserted: data.inserted, updated: data.updated })
-            : ''),
+            : '') +
+          (data.removed ? t('toastSyncRemoved', { removed: data.removed }) : ''),
       );
       if (Array.isArray(data.errors) && data.errors.length > 0) {
         const preview = data.errors.slice(0, 3).map(

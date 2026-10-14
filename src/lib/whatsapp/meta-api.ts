@@ -758,6 +758,36 @@ export interface DeleteMessageTemplateArgs {
 }
 
 /**
+ * Whether the template with this Meta id belongs to `wabaId`. A row
+ * synced while the CRM was connected to a different WABA doesn't, and
+ * Meta refuses to delete it through this one.
+ *
+ * Returns null when Meta can't be asked (network / auth error), so the
+ * caller can fall back to attempting the delete and surfacing Meta's
+ * own error.
+ */
+export async function templateBelongsToWaba(args: {
+  wabaId: string
+  accessToken: string
+  name: string
+  metaTemplateId: string
+}): Promise<boolean | null> {
+  const { wabaId, accessToken, name, metaTemplateId } = args
+  const params = new URLSearchParams({ name, fields: 'id', limit: '100' })
+  try {
+    const response = await fetch(
+      `${META_API_BASE}/${wabaId}/message_templates?${params.toString()}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    )
+    if (!response.ok) return null
+    const body = (await response.json()) as { data?: { id?: string }[] }
+    return (body.data ?? []).some((t) => t.id === metaTemplateId)
+  } catch {
+    return null
+  }
+}
+
+/**
  * Delete a message template on Meta. Pass `metaTemplateId` to scope
  * to a single language variant — otherwise Meta nukes every variant
  * sharing the same `name`.

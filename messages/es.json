@@ -1521,6 +1521,7 @@
       "toastSaveNewDry": "Plantilla guardada (simulación, sin llamada a Meta)",
       "toastSyncCount": "{total} {total, plural, =1 {plantilla sincronizada} other {plantillas sincronizadas}} desde Meta",
       "toastSyncDetails": " ({inserted} nuevas, {updated} actualizadas)",
+      "toastSyncRemoved": " · {removed} eliminadas que ya no están en esta cuenta de WhatsApp",
       "toastSyncFailed": "Error al sincronizar: {preview}",
       "toastSyncTruncated": "Solo se sincronizaron las primeras 2000 plantillas; tu cuenta tiene más. Sincroniza de nuevo para continuar o contacta a soporte si esto persiste.",
       "toastSyncError": "Error al sincronizar las plantillas",

@@ -1521,6 +1521,7 @@
       "toastSaveNewDry": "Modelo salvo (simulação — sem chamada à Meta)",
       "toastSyncCount": "{total} {total, plural, =1 {modelo sincronizado} other {modelos sincronizados}} da Meta",
       "toastSyncDetails": " ({inserted} novos, {updated} atualizados)",
+      "toastSyncRemoved": " · {removed} removidos que não estão mais nesta conta do WhatsApp",
       "toastSyncFailed": "Falha ao sincronizar: {preview}",
       "toastSyncTruncated": "Apenas os primeiros 2000 modelos foram sincronizados — sua conta tem mais. Sincronize novamente para continuar ou contate o suporte se isso persistir.",
       "toastSyncError": "Falha ao sincronizar os modelos",

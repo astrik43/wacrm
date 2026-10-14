@@ -18,8 +18,9 @@ import type { TemplateButton, TemplateSampleValues } from '@/types'
  * states (PAUSED) from terminal ones (DISABLED) and so webhook events
  * land 1:1 without a translation table.
  *
- * Locally-created templates (no Meta counterpart) are NOT deleted —
- * they remain visible so the user can notice drift and clean up.
+ * Rows whose Meta template is no longer on the connected WABA (deleted
+ * on Meta, or synced from a WABA the account was connected to before)
+ * are removed. Locally-created drafts (no meta_template_id) are kept.
  */
 
 const META_API_VERSION = 'v21.0'
@@ -286,13 +287,50 @@ export async function POST() {
       }
     }
 
+    // Rows whose Meta template isn't on the connected WABA any more —
+    // deleted on Meta, or synced while a different WABA was connected.
+    // Only prune off a complete listing; a truncated one would make
+    // every template past the cap look stale.
+    const truncated = pageCount >= PAGE_CAP && nextUrl !== null
+    let removed = 0
+    if (!truncated) {
+      const onMeta = new Set(metaTemplates.map((t) => t.id))
+      const { data: local, error: localErr } = await supabase
+        .from('message_templates')
+        .select('id, meta_template_id')
+        .eq('account_id', accountId)
+        .not('meta_template_id', 'is', null)
+      if (localErr) {
+        errors.push({ name: '*', language: '*', message: localErr.message })
+      } else {
+        const stale = (
+          (local ?? []) as { id: string; meta_template_id: string }[]
+        )
+          .filter((r) => !onMeta.has(r.meta_template_id))
+          .map((r) => r.id)
+        for (let i = 0; i < stale.length; i += 100) {
+          const chunk = stale.slice(i, i + 100)
+          const { error: delErr } = await supabase
+            .from('message_templates')
+            .delete()
+            .in('id', chunk)
+          if (delErr) {
+            errors.push({ name: '*', language: '*', message: delErr.message })
+            break
+          }
+          removed += chunk.length
+        }
+      }
+    }
+
     return NextResponse.json({
       success: errors.length === 0,
       total: metaTemplates.length,
       inserted,
       updated,
+      removed,
       errors,
-      truncated: pageCount >= PAGE_CAP && nextUrl !== null,
+      truncated,
     })
   } catch (error) {
     // Auth failures map to 401/403 rather than being folded into the
