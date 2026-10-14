@@ -12,6 +12,7 @@ import {
   Pencil,
   RotateCcw,
   Upload,
+  Search,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import {
@@ -54,11 +55,30 @@ import type {
 } from '@/types';
 import { templateStatusConfig } from '@/lib/template-status';
 import {
+  DEFAULT_TEMPLATE_CRITERIA,
+  filterTemplates,
+  hasActiveFilters,
+  isTemplateSort,
+  templateLanguages,
+  type TemplateCriteria,
+  type TemplateSort,
+} from '@/lib/template-filter';
+import {
   extractVariableIndices,
   TEMPLATE_LIMITS,
 } from '@/lib/whatsapp/template-validators';
 
 const CATEGORIES = ['Marketing', 'Utility', 'Authentication'] as const;
+// Explicit key map (not `t(\`sort${...}\`)`) so the catalogue scanner
+// can see every key.
+const SORT_LABEL_KEYS = {
+  newest: 'sortNewest',
+  oldest: 'sortOldest',
+  updated: 'sortUpdated',
+  name_asc: 'sortNameAsc',
+  name_desc: 'sortNameDesc',
+} as const satisfies Record<TemplateSort, string>;
+const SORT_OPTIONS = Object.keys(SORT_LABEL_KEYS) as TemplateSort[];
 type HeaderFormat = 'none' | 'text' | 'image' | 'video' | 'document';
 const HEADER_FORMATS: HeaderFormat[] = ['none', 'text', 'image', 'video', 'document'];
 
@@ -136,6 +156,9 @@ export function TemplateManager() {
 
   const [loading, setLoading] = useState(true);
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
+  const [criteria, setCriteria] = useState<TemplateCriteria>(
+    DEFAULT_TEMPLATE_CRITERIA,
+  );
   const [dialogOpen, setDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -171,6 +194,29 @@ export function TemplateManager() {
         : 0,
     [form.header_format, form.header_content],
   );
+
+  const visibleTemplates = useMemo(
+    () => filterTemplates(templates, criteria),
+    [templates, criteria],
+  );
+  const languageOptions = useMemo(() => templateLanguages(templates), [templates]);
+  // Only offer statuses / categories that occur, with how many of each.
+  const statusCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const tpl of templates) {
+      const key = tpl.status || 'DRAFT';
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return counts;
+  }, [templates]);
+  const categoryCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const tpl of templates) {
+      counts.set(tpl.category, (counts.get(tpl.category) ?? 0) + 1);
+    }
+    return counts;
+  }, [templates]);
+  const filtersActive = hasActiveFilters(criteria);
 
   // Resize body_samples so it always has exactly bodyVarCount entries.
   // (We mutate via setForm in an effect so React owns the state.)
@@ -552,8 +598,175 @@ export function TemplateManager() {
           </CardContent>
         </Card>
       ) : (
+        <>
+        <div className="space-y-2">
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+            <div className="relative w-full lg:max-w-xs">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <Input
+                type="search"
+                value={criteria.query}
+                onChange={(e) =>
+                  setCriteria((c) => ({ ...c, query: e.target.value }))
+                }
+                placeholder={t('searchPlaceholder')}
+                aria-label={t('searchPlaceholder')}
+                className="pl-8 bg-card border-border text-foreground placeholder:text-muted-foreground"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+              <Select
+                value={criteria.status}
+                onValueChange={(val) =>
+                  setCriteria((c) => ({
+                    ...c,
+                    status: (val ?? 'all') as TemplateCriteria['status'],
+                  }))
+                }
+              >
+                <SelectTrigger
+                  aria-label={t('filterStatus')}
+                  className="w-full sm:w-40 bg-card border-border text-foreground"
+                >
+                  <SelectValue>
+                    {criteria.status === 'all'
+                      ? t('allStatuses')
+                      : templateStatusConfig[criteria.status].label}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent className="bg-popover border-border">
+                  <SelectItem value="all">{t('allStatuses')}</SelectItem>
+                  {(
+                    Object.keys(templateStatusConfig) as Array<
+                      keyof typeof templateStatusConfig
+                    >
+                  )
+                    .filter((key) => statusCounts.has(key))
+                    .map((key) => (
+                      <SelectItem key={key} value={key}>
+                        {templateStatusConfig[key].label} ({statusCounts.get(key)})
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+
+              <Select
+                value={criteria.category}
+                onValueChange={(val) =>
+                  setCriteria((c) => ({
+                    ...c,
+                    category: (val ?? 'all') as TemplateCriteria['category'],
+                  }))
+                }
+              >
+                <SelectTrigger
+                  aria-label={t('filterCategory')}
+                  className="w-full sm:w-40 bg-card border-border text-foreground"
+                >
+                  <SelectValue>
+                    {criteria.category === 'all'
+                      ? t('allCategories')
+                      : criteria.category}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent className="bg-popover border-border">
+                  <SelectItem value="all">{t('allCategories')}</SelectItem>
+                  {CATEGORIES.filter((cat) => categoryCounts.has(cat)).map(
+                    (cat) => (
+                      <SelectItem key={cat} value={cat}>
+                        {cat} ({categoryCounts.get(cat)})
+                      </SelectItem>
+                    ),
+                  )}
+                </SelectContent>
+              </Select>
+
+              {languageOptions.length > 1 && (
+                <Select
+                  value={criteria.language}
+                  onValueChange={(val) =>
+                    setCriteria((c) => ({ ...c, language: val ?? 'all' }))
+                  }
+                >
+                  <SelectTrigger
+                    aria-label={t('filterLanguage')}
+                    className="w-full sm:w-36 bg-card border-border text-foreground"
+                  >
+                    <SelectValue>
+                      {criteria.language === 'all'
+                        ? t('allLanguages')
+                        : criteria.language}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover border-border">
+                    <SelectItem value="all">{t('allLanguages')}</SelectItem>
+                    {languageOptions.map((lang) => (
+                      <SelectItem key={lang} value={lang}>
+                        {lang}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+
+              <Select
+                value={criteria.sort}
+                onValueChange={(val) => {
+                  if (val && isTemplateSort(val)) {
+                    setCriteria((c) => ({ ...c, sort: val }));
+                  }
+                }}
+              >
+                <SelectTrigger
+                  aria-label={t('sortLabel')}
+                  className="w-full sm:w-44 bg-card border-border text-foreground"
+                >
+                  <SelectValue>{t(SORT_LABEL_KEYS[criteria.sort])}</SelectValue>
+                </SelectTrigger>
+                <SelectContent className="bg-popover border-border">
+                  {SORT_OPTIONS.map((sort) => (
+                    <SelectItem key={sort} value={sort}>
+                      {t(SORT_LABEL_KEYS[sort])}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <span aria-live="polite">
+              {t('showingCount', {
+                shown: visibleTemplates.length,
+                total: templates.length,
+              })}
+            </span>
+            {filtersActive && (
+              <button
+                type="button"
+                onClick={() =>
+                  setCriteria((c) => ({
+                    ...DEFAULT_TEMPLATE_CRITERIA,
+                    sort: c.sort,
+                  }))
+                }
+                className="inline-flex items-center gap-1 text-primary hover:underline"
+              >
+                <X className="size-3" />
+                {t('clearFilters')}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {visibleTemplates.length === 0 ? (
+          <Card>
+            <CardContent className="py-10 text-center text-sm text-muted-foreground">
+              {t('noMatches')}
+            </CardContent>
+          </Card>
+        ) : (
         <div className="grid gap-3 xl:grid-cols-2">
-          {templates.map((template) => {
+          {visibleTemplates.map((template) => {
             const statusKey = template.status || 'DRAFT';
             const status = templateStatusConfig[statusKey];
             return (
@@ -663,6 +876,8 @@ export function TemplateManager() {
             );
           })}
         </div>
+        )}
+        </>
       )}
 
       <Dialog
