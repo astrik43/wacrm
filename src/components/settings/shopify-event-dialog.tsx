@@ -18,7 +18,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { Loader2, Plus, Send, Trash2 } from 'lucide-react';
+import { Loader2, Plus, Search, Send, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { Button } from '@/components/ui/button';
@@ -171,6 +171,7 @@ export function ShopifyEventDialog({
   );
   const [testSource, setTestSource] = useState<'latest' | 'sample'>('latest');
   const [testing, setTesting] = useState(false);
+  const [templateQuery, setTemplateQuery] = useState('');
   const [delayAmount, setDelayAmount] = useState('0');
   const [delayUnit, setDelayUnit] = useState<DelayUnit>('minutes');
 
@@ -225,6 +226,19 @@ export function ShopifyEventDialog({
       null,
     [templates, selectedKey]
   );
+  // Search by name, language or body text. The chosen template always
+  // stays in the list so the select never shows a blank value.
+  const visibleTemplates = useMemo(() => {
+    const q = templateQuery.trim().toLowerCase();
+    if (!q) return templates;
+    return templates.filter(
+      (tpl) =>
+        templateKey(tpl.name, tpl.language) === selectedKey ||
+        tpl.name.toLowerCase().includes(q) ||
+        (tpl.language ?? '').toLowerCase().includes(q) ||
+        (tpl.body_text ?? '').toLowerCase().includes(q)
+    );
+  }, [templates, templateQuery, selectedKey]);
   const slotIds = useMemo(
     () => (template ? templateSlotIds(template) : []),
     [template]
@@ -482,28 +496,56 @@ export function ShopifyEventDialog({
                   {t('noApprovedTemplates')}
                 </p>
               ) : (
-                <Select
-                  value={selectedKey || undefined}
-                  onValueChange={(val) => {
-                    setSelectedKey(val ?? '');
-                    setMapping({ body: [] });
-                  }}
-                >
-                  <SelectTrigger className="border-border bg-muted text-foreground w-full">
-                    <SelectValue placeholder={t('templatePlaceholder')} />
-                  </SelectTrigger>
-                  <SelectContent className="border-border bg-popover">
-                    {templates.map((tpl) => (
-                      <SelectItem
-                        key={tpl.id}
-                        value={templateKey(tpl.name, tpl.language)}
-                      >
-                        {tpl.name}
-                        {tpl.language ? ` (${tpl.language})` : ''}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="space-y-2">
+                  {templates.length > 5 && (
+                    <div className="relative">
+                      <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
+                      <Input
+                        id="shopify-template-search"
+                        type="search"
+                        value={templateQuery}
+                        placeholder={t('templateSearchPlaceholder')}
+                        onChange={(e) => setTemplateQuery(e.target.value)}
+                        className="pl-8"
+                      />
+                    </div>
+                  )}
+                  <Select
+                    value={selectedKey || undefined}
+                    onValueChange={(val) => {
+                      setSelectedKey(val ?? '');
+                      setMapping({ body: [] });
+                    }}
+                  >
+                    <SelectTrigger className="border-border bg-muted text-foreground w-full">
+                      <SelectValue placeholder={t('templatePlaceholder')} />
+                    </SelectTrigger>
+                    <SelectContent className="border-border bg-popover">
+                      {visibleTemplates.length === 0 && (
+                        <p className="text-muted-foreground px-2 py-1.5 text-sm">
+                          {t('templateSearchEmpty')}
+                        </p>
+                      )}
+                      {visibleTemplates.map((tpl) => (
+                        <SelectItem
+                          key={tpl.id}
+                          value={templateKey(tpl.name, tpl.language)}
+                        >
+                          {tpl.name}
+                          {tpl.language ? ` (${tpl.language})` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {templateQuery.trim() && (
+                    <p className="text-muted-foreground text-xs">
+                      {t('templateSearchCount', {
+                        shown: visibleTemplates.length,
+                        total: templates.length,
+                      })}
+                    </p>
+                  )}
+                </div>
               )}
             </div>
 
