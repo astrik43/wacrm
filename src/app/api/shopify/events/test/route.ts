@@ -6,8 +6,9 @@
 // saved or switched on, and whatever test mode says. Values come from
 // the latest real order (or cart) laid over sample values, or from the
 // samples alone. A shipment update uses the latest shipment that has
-// tracking, and its order, so the tracking link is a real one. Logged
-// in Activity as a test.
+// tracking, and its order, so the tracking link is a real one. The COD
+// confirmation code is never a real order's. Logged in Activity as a
+// test.
 // ============================================================
 
 import { NextResponse } from 'next/server';
@@ -246,6 +247,12 @@ export async function POST(request: Request) {
       }
       orderName = row?.order_name ?? row?.customer_name ?? orderName;
     }
+
+    // A real order's COD confirmation code would let the tester confirm
+    // or cancel that customer's order from the test message. Tests get
+    // the sample code, whose page simply doesn't exist.
+    fields.cod_confirm_token = SHOPIFY_FIELDS.cod_confirm_token.sample;
+    fields.cod_confirm_url = SHOPIFY_FIELDS.cod_confirm_url.sample;
 
     const outcome = await sendTestNotification(db, ctx.accountId, {
       event,

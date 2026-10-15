@@ -217,4 +217,21 @@ describe('POST /api/shopify/events/test', () => {
     await post({ ...BODY, event: 'order_created', step: 0 });
     expect(mocks.tables).not.toContain('shopify_fulfillments');
   });
+
+  it("never sends a real order's COD confirmation code", async () => {
+    mocks.latest = {
+      order_name: '#EL1700',
+      fields: {
+        customer_first_name: 'Asha',
+        order_number: '#EL1700',
+        cod_confirm_token: 'real-customer-token-0123456789ab',
+        cod_confirm_url: 'https://crm.test/o/real-customer-token-0123456789ab',
+      },
+    };
+    await post({ ...BODY, event: 'order_created', step: 0 });
+    const fields = mocks.sendTest.mock.calls[0][2].fields;
+    expect(fields.customer_first_name).toBe('Asha');
+    expect(fields.cod_confirm_token).not.toBe('real-customer-token-0123456789ab');
+    expect(fields.cod_confirm_url).not.toContain('real-customer-token');
+  });
 });
