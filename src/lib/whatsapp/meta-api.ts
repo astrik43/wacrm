@@ -32,6 +32,9 @@ interface MetaErrorResponse {
     error_subcode?: number
     type?: string
     fbtrace_id?: string
+    /** Graph's explanation for people, e.g. why a template edit was refused. */
+    error_user_title?: string
+    error_user_msg?: string
     /** WhatsApp-specific envelope — `details` is the human-readable part. */
     error_data?: { messaging_product?: string; details?: string }
   }
@@ -55,6 +58,9 @@ export class MetaApiError extends Error {
   readonly httpStatus: number
   /** `error.error_data.details` — WhatsApp endpoints put the useful text here. */
   readonly details: string | null
+  /** `error_user_title` / `error_user_msg` — template endpoints explain refusals here. */
+  readonly userTitle: string | null
+  readonly userMessage: string | null
 
   constructor(
     message: string,
@@ -65,6 +71,8 @@ export class MetaApiError extends Error {
       fbtraceId?: string | null
       httpStatus: number
       details?: string | null
+      userTitle?: string | null
+      userMessage?: string | null
     },
   ) {
     super(message)
@@ -75,7 +83,25 @@ export class MetaApiError extends Error {
     this.fbtraceId = fields.fbtraceId ?? null
     this.httpStatus = fields.httpStatus
     this.details = fields.details ?? null
+    this.userTitle = fields.userTitle ?? null
+    this.userMessage = fields.userMessage ?? null
   }
+}
+
+/**
+ * The full story of a Meta failure for people to read: Meta's short
+ * `message` ("Invalid parameter") plus whichever explanation it sent
+ * (`error_user_title: error_user_msg`, or `error_data.details`).
+ */
+export function describeMetaError(err: unknown, fallback: string): string {
+  if (!(err instanceof Error)) return fallback
+  if (!(err instanceof MetaApiError)) return err.message || fallback
+  const explanation = err.userMessage
+    ? [err.userTitle, err.userMessage].filter(Boolean).join(': ')
+    : err.details
+  return explanation && explanation !== err.message
+    ? `${err.message} — ${explanation}`
+    : err.message
 }
 
 /**
@@ -99,6 +125,8 @@ async function readMetaError(response: Response, fallback: string): Promise<Meta
     fbtraceId: envelope?.fbtrace_id ?? null,
     httpStatus: response.status,
     details: envelope?.error_data?.details ?? null,
+    userTitle: envelope?.error_user_title ?? null,
+    userMessage: envelope?.error_user_msg ?? null,
   })
 }
 
