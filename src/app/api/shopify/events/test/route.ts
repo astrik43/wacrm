@@ -5,7 +5,9 @@
 // number the admin chose: whatever its delay, whether or not it is
 // saved or switched on, and whatever test mode says. Values come from
 // the latest real order (or cart) laid over sample values, or from the
-// samples alone. Logged in Activity as a test.
+// samples alone. A shipment update uses the latest shipment that has
+// tracking, and its order, so the tracking link is a real one. Logged
+// in Activity as a test.
 // ============================================================
 
 import { NextResponse } from 'next/server';
@@ -18,6 +20,7 @@ import {
   RATE_LIMITS,
 } from '@/lib/rate-limit';
 import {
+  FULFILLMENT_EVENTS,
   isCartEvent,
   isShopifyEvent,
   isShopifyVariant,
@@ -47,6 +50,54 @@ function sampleFields(): ShopifyFields {
     if (key !== 'product_image_url') fields[key] = SHOPIFY_FIELDS[key].sample;
   }
   return fields;
+}
+
+type Db = ReturnType<typeof supabaseAdmin>;
+
+/**
+ * The newest shipment with tracking, with its order's values (when the
+ * order is known) — what a real shipment update would carry.
+ */
+async function latestShipment(
+  db: Db,
+  accountId: string
+): Promise<{ fields: ShopifyFields; orderName: string | null } | null> {
+  const { data } = await db
+    .from('shopify_fulfillments')
+    .select('shopify_order_id, tracking_number, tracking_url, tracking_company')
+    .eq('account_id', accountId)
+    .not('tracking_url', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const row = data as {
+    shopify_order_id: string | null;
+    tracking_number: string | null;
+    tracking_url: string | null;
+    tracking_company: string | null;
+  } | null;
+  if (!row) return null;
+
+  type StoredOrder = { order_name: string | null; fields: ShopifyFields | null };
+  let order: StoredOrder | null = null;
+  if (row.shopify_order_id) {
+    const { data: orderRow } = await db
+      .from('shopify_orders')
+      .select('order_name, fields')
+      .eq('account_id', accountId)
+      .eq('shopify_order_id', row.shopify_order_id)
+      .maybeSingle();
+    order = (orderRow as StoredOrder | null) ?? null;
+  }
+
+  const tracking: ShopifyFields = {};
+  if (row.tracking_number) tracking.tracking_number = row.tracking_number;
+  if (row.tracking_url) tracking.tracking_url = row.tracking_url;
+  if (row.tracking_company) tracking.tracking_company = row.tracking_company;
+  return {
+    fields: { ...(order?.fields ?? {}), ...tracking },
+    orderName: order?.order_name ?? null,
+  };
 }
 
 export async function POST(request: Request) {
@@ -153,7 +204,14 @@ export async function POST(request: Request) {
 
     let fields = sampleFields();
     let orderName = SHOPIFY_FIELDS.order_number.sample;
-    if (source === 'latest') {
+    const shipment =
+      source === 'latest' && FULFILLMENT_EVENTS.includes(event)
+        ? await latestShipment(db, ctx.accountId)
+        : null;
+    if (shipment) {
+      fields = { ...fields, ...shipment.fields };
+      orderName = shipment.orderName ?? orderName;
+    } else if (source === 'latest') {
       const { data: latest } = await db
         .from(isCartEvent(event) ? 'shopify_checkouts' : 'shopify_orders')
         .select(isCartEvent(event) ? 'customer_name, fields' : 'order_name, fields')
