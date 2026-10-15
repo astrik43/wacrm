@@ -33,14 +33,15 @@ export const FLEXYPE_CHECKOUT_PREFIX = 'flexype:';
 export const FLEXYPE_SESSION_ATTRIBUTE = 'FlexyPe Session ID';
 
 /**
- * The phone in FlexyPe's documented sample payloads, which is what the
- * dashboard's "Test" button sends. A test must never schedule real
- * messages to whoever owns that number.
+ * Phones FlexyPe uses in sample payloads: the one in its docs, and the
+ * one its dashboard "Test" button actually sends (seen on a live 2026-05
+ * test delivery). A test must never schedule real messages to whoever
+ * owns those numbers.
  */
-const SAMPLE_PHONE = '919876543210';
+const SAMPLE_PHONES: readonly string[] = ['919876543210', '919845012345'];
 
 export function isFlexypeSample(checkout: FlexypeCheckout): boolean {
-  return checkout.phone === SAMPLE_PHONE;
+  return checkout.phone !== null && SAMPLE_PHONES.includes(checkout.phone);
 }
 
 export interface FlexypeCheckout {
