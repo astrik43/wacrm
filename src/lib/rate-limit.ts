@@ -140,6 +140,10 @@ export const RATE_LIMITS = {
    *  successful redemption mutates two profiles and an invite row, so
    *  the abuse surface is "spam join attempts." */
   invitationRedeem: { limit: 10, windowMs: 60_000 },
+  /** Public /r/<code> redirect links in WhatsApp buttons (per IP).
+   *  Codes are HMAC-signed, so this only bounds load; generous because
+   *  mobile carriers put many customers behind one address. */
+  publicLink: { limit: 120, windowMs: 60_000 },
   /** Admin-only account / member-management actions: create/revoke
    *  invitation, rename account, change member role, remove member,
    *  transfer ownership. 30/min per user is comfortably above any

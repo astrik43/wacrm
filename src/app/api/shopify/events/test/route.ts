@@ -33,6 +33,7 @@ import {
   SHOPIFY_FIELD_KEYS,
   type ShopifyFields,
 } from '@/lib/shopify/order-fields';
+import { makeLinkCode } from '@/lib/shopify/link-codes';
 import { normalizeShopifyPhone } from '@/lib/shopify/phone';
 import {
   parseVariableMapping,
@@ -64,13 +65,16 @@ async function latestShipment(
 ): Promise<{ fields: ShopifyFields; orderName: string | null } | null> {
   const { data } = await db
     .from('shopify_fulfillments')
-    .select('shopify_order_id, tracking_number, tracking_url, tracking_company')
+    .select(
+      'shopify_fulfillment_id, shopify_order_id, tracking_number, tracking_url, tracking_company'
+    )
     .eq('account_id', accountId)
     .not('tracking_url', 'is', null)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
   const row = data as {
+    shopify_fulfillment_id: string;
     shopify_order_id: string | null;
     tracking_number: string | null;
     tracking_url: string | null;
@@ -94,6 +98,11 @@ async function latestShipment(
   if (row.tracking_number) tracking.tracking_number = row.tracking_number;
   if (row.tracking_url) tracking.tracking_url = row.tracking_url;
   if (row.tracking_company) tracking.tracking_company = row.tracking_company;
+  // Real codes, so the test's /r/ button opens this shipment's page.
+  const trackingLink = makeLinkCode('t', accountId, row.shopify_fulfillment_id);
+  if (trackingLink) tracking.tracking_link_code = trackingLink;
+  const orderLink = makeLinkCode('s', accountId, row.shopify_order_id);
+  if (orderLink) tracking.order_link_code = orderLink;
   return {
     fields: { ...(order?.fields ?? {}), ...tracking },
     orderName: order?.order_name ?? null,
@@ -214,17 +223,27 @@ export async function POST(request: Request) {
     } else if (source === 'latest') {
       const { data: latest } = await db
         .from(isCartEvent(event) ? 'shopify_checkouts' : 'shopify_orders')
-        .select(isCartEvent(event) ? 'customer_name, fields' : 'order_name, fields')
+        .select(
+          isCartEvent(event)
+            ? 'customer_name, fields'
+            : 'shopify_order_id, order_name, fields'
+        )
         .eq('account_id', ctx.accountId)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
       const row = latest as {
+        shopify_order_id?: string | null;
         order_name?: string | null;
         customer_name?: string | null;
         fields?: ShopifyFields | null;
       } | null;
       if (row?.fields) fields = { ...fields, ...row.fields };
+      // Orders stored before link codes existed.
+      const orderLink = makeLinkCode('s', ctx.accountId, row?.shopify_order_id);
+      if (orderLink && !row?.fields?.order_link_code) {
+        fields.order_link_code = orderLink;
+      }
       orderName = row?.order_name ?? row?.customer_name ?? orderName;
     }
 

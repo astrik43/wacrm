@@ -892,3 +892,34 @@ describe('testing mode — only test numbers get through', () => {
     expect(state.checkoutUpserts).toEqual([]);
   });
 });
+
+describe('CRM redirect link codes', () => {
+  it('gives an order its order-page code', async () => {
+    const state = freshState();
+    await processShopifyWebhook(fakeDb(state), CONFIG, 'orders/create', ORDER, 'wh-1');
+    expect(state.orderUpserts[0].row.fields).toMatchObject({
+      order_link_code: expect.stringMatching(/^s820982911946154500\./),
+    });
+  });
+
+  it('gives a shipment its tracking code and its order code', async () => {
+    const state = freshState({ storedOrder: STORED_ORDER, rpcResult: NEW });
+    await processShopifyWebhook(
+      fakeDb(state),
+      CONFIG,
+      'fulfillments/create',
+      {
+        id: 255858046,
+        order_id: 820982911946154500,
+        status: 'success',
+        tracking_number: 'EX123',
+        tracking_url: 'https://t.example/EX123',
+      },
+      'wh-2'
+    );
+    expect(mocks.notify.mock.calls[0][2].fields).toMatchObject({
+      tracking_link_code: expect.stringMatching(/^t255858046\./),
+      order_link_code: expect.stringMatching(/^s820982911946154500\./),
+    });
+  });
+});

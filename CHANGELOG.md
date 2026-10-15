@@ -98,6 +98,13 @@ and when the shipment is out for delivery or delivered.
 > (`test_mode` and `test_phones` on `shopify_configs`, `is_test` on
 > `shopify_notifications`). Apply it **before** deploying this version.
 
+- **Shopify: the CRM's own button links.** A template button set to
+  `https://<CRM>/r/{{1}}` can open a shipment's tracking page or an
+  order's status page. The CRM redirects to the link as it is when
+  tapped, so switching courier needs no template change. Codes are
+  signed per shipment/order, so it is not an open redirect. No
+  migration.
+
 ## [0.8.1] — 2026-07-10
 
 Fixes inbound chats fragmenting into multiple threads for the same

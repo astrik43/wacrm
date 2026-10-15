@@ -2069,6 +2069,7 @@
         "payment_mode": "Forma de pagamento",
         "cod_confirm_token": "Página de confirmação de COD (sufixo do botão)",
         "cod_confirm_url": "Link da página de confirmação de COD",
+        "order_link_code": "Página do pedido pelo link do CRM (sufixo do botão /r/…)",
         "checkout_url": "Link de recuperação do checkout",
         "checkout_url_path": "Link de recuperação do checkout (sufixo do botão)",
         "customer_first_name": "Primeiro nome do cliente",
@@ -2083,6 +2084,7 @@
         "tracking_number": "Código de rastreio",
         "tracking_company": "Transportadora",
         "tracking_url": "Link de rastreio",
+        "tracking_link_code": "Rastreio pelo link do CRM (sufixo do botão /r/…)",
         "cancel_reason": "Motivo do cancelamento",
         "product_image_url": "Imagem do produto"
       },
