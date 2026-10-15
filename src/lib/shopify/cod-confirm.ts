@@ -28,8 +28,8 @@ export function isCodDecision(value: unknown): value is CodDecision {
 
 /** The Shopify order tag each decision adds. */
 export const COD_TAGS: Record<CodDecision, string> = {
-  confirmed: 'COD confirmed',
-  cancelled: 'cancelled by WA CRM',
+  confirmed: 'WHATSAPP CONFIRMED',
+  cancelled: 'WHATSAPP CANCELLED',
 };
 
 const RETRY_BATCH = 20;

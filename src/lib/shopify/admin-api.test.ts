@@ -298,7 +298,7 @@ describe('addOrderTags', () => {
   it('adds the tags to the order by its global id', async () => {
     fetchMock.mockResolvedValue(json(OK));
     expect(
-      await addOrderTags(db, config(), '18949134254390001', ['COD confirmed'])
+      await addOrderTags(db, config(), '18949134254390001', ['WHATSAPP CONFIRMED'])
     ).toEqual({ ok: true });
 
     const [url, init] = fetchMock.mock.calls[0];
@@ -308,7 +308,7 @@ describe('addOrderTags', () => {
     expect(body.query).toContain('tagsAdd');
     expect(body.variables).toEqual({
       id: 'gid://shopify/Order/18949134254390001',
-      tags: ['COD confirmed'],
+      tags: ['WHATSAPP CONFIRMED'],
     });
   });
 
@@ -317,7 +317,7 @@ describe('addOrderTags', () => {
       .mockResolvedValueOnce(json(DENIED))
       .mockResolvedValueOnce(json(TOKEN_RESPONSE))
       .mockResolvedValueOnce(json(OK));
-    expect(await addOrderTags(db, config(), '1', ['COD confirmed'])).toEqual({
+    expect(await addOrderTags(db, config(), '1', ['WHATSAPP CONFIRMED'])).toEqual({
       ok: true,
     });
     expect(fetchMock.mock.calls[2][1].headers['X-Shopify-Access-Token']).toBe(

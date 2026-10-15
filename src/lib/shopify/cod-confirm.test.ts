@@ -113,7 +113,7 @@ describe('decideCodOrder', () => {
       expect.anything(),
       { id: 'cfg-1' },
       '1001',
-      ['COD confirmed']
+      ['WHATSAPP CONFIRMED']
     );
     expect(state.updates[1]).toMatchObject({ cod_tag_error: null });
     expect(state.updates[1].cod_tag_synced_at).toEqual(expect.any(String));
@@ -121,7 +121,7 @@ describe('decideCodOrder', () => {
 
   it('a cancellation adds its own tag', async () => {
     await decideCodOrder(fakeDb(freshState()), TOKEN, 'cancelled');
-    expect(mocks.addOrderTags.mock.calls[0][3]).toEqual(['cancelled by WA CRM']);
+    expect(mocks.addOrderTags.mock.calls[0][3]).toEqual(['WHATSAPP CANCELLED']);
   });
 
   it('keeps the decision when Shopify does not take the tag', async () => {
@@ -184,8 +184,8 @@ describe('retryCodTags', () => {
     });
     expect(await retryCodTags(fakeDb(state))).toEqual({ retried: 2, synced: 1 });
     expect(mocks.addOrderTags.mock.calls.map((c) => [c[2], c[3]])).toEqual([
-      ['1', ['COD confirmed']],
-      ['2', ['cancelled by WA CRM']],
+      ['1', ['WHATSAPP CONFIRMED']],
+      ['2', ['WHATSAPP CANCELLED']],
     ]);
   });
 });
