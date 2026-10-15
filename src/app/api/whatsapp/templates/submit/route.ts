@@ -7,7 +7,10 @@ import {
   toErrorResponse,
 } from '@/lib/auth/account'
 import { decrypt } from '@/lib/whatsapp/encryption'
-import { submitMessageTemplate } from '@/lib/whatsapp/meta-api'
+import {
+  describeMetaError,
+  submitMessageTemplate,
+} from '@/lib/whatsapp/meta-api'
 import {
   validateTemplatePayload,
   type TemplatePayload,
@@ -188,7 +191,7 @@ export async function POST(request: Request) {
         metaTemplateId = meta.id
         metaStatus = meta.status
       } catch (e) {
-        const message = e instanceof Error ? e.message : 'Meta submit failed.'
+        const message = describeMetaError(e, 'Meta submit failed.')
         // Persist the failure so the user can retry; row stays DRAFT
         // until they fix and re-submit.
         await upsertTemplateRow(
