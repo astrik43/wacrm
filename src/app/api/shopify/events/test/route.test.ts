@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   resolveTemplateRow: vi.fn(),
   sendTest: vi.fn(),
   latest: null as Record<string, unknown> | null,
+  shipment: null as Record<string, unknown> | null,
   tables: [] as string[],
 }));
 
@@ -37,12 +38,15 @@ vi.mock('@/lib/flows/admin-client', () => ({
         select: () => builder,
         eq: () => builder,
         order: () => builder,
+        not: () => builder,
         limit: () => builder,
         maybeSingle: async () => ({
           data:
             table === 'shopify_configs'
               ? { default_country_code: '91' }
-              : mocks.latest,
+              : table === 'shopify_fulfillments'
+                ? mocks.shipment
+                : mocks.latest,
           error: null,
         }),
       };
@@ -90,6 +94,7 @@ function post(body: unknown) {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.latest = null;
+  mocks.shipment = null;
   mocks.tables = [];
   mocks.requireRole.mockResolvedValue({
     supabase: {},
@@ -181,5 +186,35 @@ describe('POST /api/shopify/events/test', () => {
     const response = await post(BODY);
     expect(response.status).toBe(502);
     expect((await response.json()).outcome.reason).toBe('131042: payment issue');
+  });
+
+  it("uses the latest shipment's real tracking link for a shipment update", async () => {
+    mocks.shipment = {
+      shopify_order_id: '1001',
+      tracking_number: '7D139859784',
+      tracking_url:
+        'https://www.ithinklogistics.com/track-order-status?tracking_number=7D139859784',
+      tracking_company: 'dtdc',
+    };
+    mocks.latest = {
+      order_name: '#EL1650',
+      fields: { customer_first_name: 'Md', order_number: '#EL1650' },
+    };
+    await post(BODY);
+    const input = mocks.sendTest.mock.calls[0][2];
+    expect(mocks.tables).toContain('shopify_fulfillments');
+    expect(input.orderName).toBe('Test · #EL1650');
+    expect(input.fields).toMatchObject({
+      tracking_number: '7D139859784',
+      tracking_url:
+        'https://www.ithinklogistics.com/track-order-status?tracking_number=7D139859784',
+      tracking_company: 'dtdc',
+      customer_first_name: 'Md',
+    });
+  });
+
+  it('does not look for a shipment for an order update', async () => {
+    await post({ ...BODY, event: 'order_created', step: 0 });
+    expect(mocks.tables).not.toContain('shopify_fulfillments');
   });
 });

@@ -49,6 +49,7 @@ import {
   type ShopifyFields,
 } from './order-fields';
 import { notifyShopifyEvent, type NotifyOutcome } from './notify';
+import { makeLinkCode } from './link-codes';
 import { pickOrderPhone } from './phone';
 import { orderRefOf } from './webhook-log';
 
@@ -225,6 +226,8 @@ async function handleOrder(
   fields.cod_confirm_token = confirmToken;
   const url = confirmUrl(confirmToken);
   if (url) fields.cod_confirm_url = url;
+  const orderLink = makeLinkCode('s', accountId, orderId);
+  if (orderLink) fields.order_link_code = orderLink;
   const row = {
     account_id: accountId,
     shopify_order_id: orderId,
@@ -578,11 +581,16 @@ async function handleFulfillment(
     pickOrderPhone([text(destination?.phone)], config.default_country_code);
   // Order values win; the fulfillment's own name/number only fill gaps
   // for orders placed before the store was connected.
+  const trackingLink = makeLinkCode('t', accountId, fulfillmentId);
+  const orderLink = makeLinkCode('s', accountId, orderId);
   const fields: ShopifyFields = {
     ...fulfillmentFields,
+    // Orders stored before link codes existed get theirs here.
+    ...(orderLink ? { order_link_code: orderLink } : {}),
     ...(order?.fields ?? {}),
     ...(next.trackingNumber ? { tracking_number: next.trackingNumber } : {}),
     ...(next.trackingUrl ? { tracking_url: next.trackingUrl } : {}),
+    ...(trackingLink ? { tracking_link_code: trackingLink } : {}),
   };
   const orderName = order?.order_name ?? fields.order_number ?? null;
   const customerName = order?.customer_name ?? fields.customer_name ?? null;

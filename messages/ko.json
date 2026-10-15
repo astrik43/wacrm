@@ -2090,6 +2090,7 @@
         "payment_mode": "결제 방식",
         "cod_confirm_token": "COD 확인 페이지 (버튼 접미사)",
         "cod_confirm_url": "COD 확인 페이지 링크",
+        "order_link_code": "CRM 링크로 주문 페이지 (/r/… 버튼 접미사)",
         "checkout_url": "결제 복구 링크",
         "checkout_url_path": "결제 복구 링크 (버튼 접미사)",
         "customer_first_name": "고객 이름",
@@ -2104,6 +2105,7 @@
         "tracking_number": "운송장 번호",
         "tracking_company": "택배사",
         "tracking_url": "배송 조회 링크",
+        "tracking_link_code": "CRM 링크로 배송 추적 (/r/… 버튼 접미사)",
         "cancel_reason": "취소 사유",
         "product_image_url": "상품 이미지"
       },

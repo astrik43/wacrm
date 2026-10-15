@@ -67,10 +67,27 @@ placeholder still ends up empty, the message is **skipped** and the
 Activity list says which one — WhatsApp rejects empty parameters.
 
 **URL buttons:** WhatsApp button links have a fixed base and a variable
-suffix. Create the template with your store as the base
-(`https://your-store.com/{{1}}`) and map the button to *Order status
-link (button suffix)*. A courier tracking link has a different base per
-courier, so put it in the body instead.
+suffix, so a template can't point "wherever this parcel is tracked".
+Use the CRM's own redirect link as the base instead:
+
+| Button | Template button URL | Map `{{1}}` to |
+|---|---|---|
+| Track order | `https://<your CRM domain>/r/{{1}}` | *Tracking via CRM link (button suffix)* |
+| View order | `https://<your CRM domain>/r/{{1}}` | *Order page via CRM link (button suffix)* |
+
+For the example URL Meta asks for, use
+`https://<your CRM domain>/r/t7296329941302.Kx3vQ9aL2mWp8RtY`.
+
+When the customer taps it, the CRM looks up that shipment (or order)
+and redirects to its link **as it is at that moment** — so changing
+courier or tracking partner needs no template change, and a tracking
+link Shopify adds or changes later is picked up. A shipment without a
+tracking link yet goes to the order page instead. Each code is signed
+for one shipment or order of your store, so the link can't be used to
+send people anywhere else.
+
+The older way still works: your store as the base
+(`https://your-store.com/{{1}}`) with *Order URL (button suffix)*.
 
 ## COD and prepaid templates
 

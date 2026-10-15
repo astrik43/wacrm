@@ -28,10 +28,12 @@ export const SHOPIFY_FIELD_KEYS = [
   'tracking_number',
   'tracking_company',
   'tracking_url',
+  'tracking_link_code',
   'cancel_reason',
   'payment_mode',
   'cod_confirm_token',
   'cod_confirm_url',
+  'order_link_code',
   'checkout_url',
   'checkout_url_path',
   'product_image_url',
@@ -81,6 +83,12 @@ export const SHOPIFY_FIELDS: Record<ShopifyFieldKey, FieldMeta> = {
     sample: 'https://track.example.com/EX123456789',
     events: FULFILLMENT_EVENTS,
   },
+  // Suffix of a button whose URL is https://<this CRM>/r/{{1}}: opens the
+  // shipment's tracking link as it is when tapped (see link-codes.ts).
+  tracking_link_code: {
+    sample: 't7296329941302.Kx3vQ9aL2mWp8RtY',
+    events: FULFILLMENT_EVENTS,
+  },
   cancel_reason: { sample: 'customer', events: ['order_cancelled'] },
   payment_mode: { sample: 'Cash on Delivery', events: ORDER_EVENTS },
   // The slug of the public confirmation page: the suffix of a template
@@ -91,6 +99,11 @@ export const SHOPIFY_FIELDS: Record<ShopifyFieldKey, FieldMeta> = {
   },
   cod_confirm_url: {
     sample: 'https://crm.example.com/o/Zk3vX9aQ2mLw8RtY5uHc1BnE7pJd4GsF',
+    events: ORDER_EVENTS,
+  },
+  // Same, for the order's status page.
+  order_link_code: {
+    sample: 's18943104778550.Zk3vX9aQ2mLw8RtY',
     events: ORDER_EVENTS,
   },
   checkout_url: {

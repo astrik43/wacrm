@@ -2090,6 +2090,7 @@
         "payment_mode": "Payment mode",
         "cod_confirm_token": "COD confirmation page (button suffix)",
         "cod_confirm_url": "COD confirmation page link",
+        "order_link_code": "Order page via CRM link (button suffix for /r/…)",
         "checkout_url": "Checkout recovery link",
         "checkout_url_path": "Checkout recovery link (button suffix)",
         "customer_first_name": "Customer first name",
@@ -2104,6 +2105,7 @@
         "tracking_number": "Tracking number",
         "tracking_company": "Courier",
         "tracking_url": "Tracking link",
+        "tracking_link_code": "Tracking via CRM link (button suffix for /r/…)",
         "cancel_reason": "Cancel reason",
         "product_image_url": "Product image"
       },
