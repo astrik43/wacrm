@@ -2101,6 +2101,7 @@
         "order_total": "주문 총액",
         "currency": "통화",
         "item_summary": "상품 요약",
+        "product_name": "상품명(첫 번째 품목)",
         "item_count": "상품 수량",
         "order_status_url": "주문 상태 링크",
         "order_status_url_path": "주문 상태 링크 (버튼 접미사)",

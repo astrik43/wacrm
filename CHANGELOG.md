@@ -117,6 +117,11 @@ and when the shipment is out for delivery or delivered.
   signed per shipment/order, so it is not an open redirect. No
   migration.
 
+- **Shopify / FlexyPe: product name field.** Templates can map
+  *Product name (first item)* — just the first item's name, without
+  the "× 1 +1 more" of *Item summary*. Fills for orders and carts
+  received from now on. No migration.
+
 - **Shopify / FlexyPe: cart reminder button links.** Cart reminder
   templates can use the same `https://<CRM>/r/{{1}}` button, mapped to
   *Cart via CRM link*; it opens the abandoned checkout's own link,

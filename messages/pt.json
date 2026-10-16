@@ -2083,6 +2083,7 @@
         "order_total": "Total do pedido",
         "currency": "Moeda",
         "item_summary": "Resumo dos itens",
+        "product_name": "Nome do produto (primeiro item)",
         "item_count": "Quantidade de itens",
         "order_status_url": "Link de status do pedido",
         "order_status_url_path": "Link de status do pedido (sufixo do botão)",

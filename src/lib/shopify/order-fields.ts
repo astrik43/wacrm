@@ -22,6 +22,7 @@ export const SHOPIFY_FIELD_KEYS = [
   'order_total',
   'currency',
   'item_summary',
+  'product_name',
   'item_count',
   'order_status_url',
   'order_status_url_path',
@@ -69,6 +70,8 @@ export const SHOPIFY_FIELDS: Record<ShopifyFieldKey, FieldMeta> = {
   order_total: { sample: '2499.00' },
   currency: { sample: 'INR' },
   item_summary: { sample: 'Aviator sunglasses × 1 +1 more' },
+  // The first item's name alone, for "your <product> is waiting".
+  product_name: { sample: 'Aviator sunglasses' },
   item_count: { sample: '2' },
   order_status_url: {
     sample: 'https://example.myshopify.com/orders/abc123/authenticate?key=xyz',
@@ -189,10 +192,15 @@ function urlPath(url: string): string {
   }
 }
 
-function summariseItems(lineItems: unknown): { summary: string; count: number } {
+function summariseItems(lineItems: unknown): {
+  summary: string;
+  productName: string;
+  count: number;
+} {
   const items = Array.isArray(lineItems) ? lineItems : [];
   let count = 0;
   let first = '';
+  let productName = '';
   for (const raw of items) {
     const item = obj(raw);
     if (!item) continue;
@@ -201,12 +209,19 @@ function summariseItems(lineItems: unknown): { summary: string; count: number } 
     count += qty;
     if (!first) {
       const title = str(item.title) || str(item.name);
-      if (title) first = `${title} × ${qty}`;
+      if (title) {
+        first = `${title} × ${qty}`;
+        productName = title;
+      }
     }
   }
   const more = items.length - 1;
   const summary = first && more > 0 ? `${first} +${more} more` : first;
-  return { summary: sanitizeTemplateValue(summary), count };
+  return {
+    summary: sanitizeTemplateValue(summary),
+    productName: sanitizeTemplateValue(productName),
+    count,
+  };
 }
 
 /** Customer display names from an order payload. */
@@ -243,8 +258,9 @@ export function extractOrderFields(order: unknown): ShopifyFields {
   put(fields, 'order_number', str(o.name));
   put(fields, 'order_total', str(o.current_total_price) || str(o.total_price));
   put(fields, 'currency', str(o.currency));
-  const { summary, count } = summariseItems(o.line_items);
+  const { summary, productName, count } = summariseItems(o.line_items);
   put(fields, 'item_summary', summary);
+  put(fields, 'product_name', productName);
   if (count > 0) fields.item_count = String(count);
   const statusUrl = str(o.order_status_url);
   put(fields, 'order_status_url', statusUrl);
@@ -290,8 +306,9 @@ export function extractCheckoutFields(checkout: unknown): ShopifyFields {
   put(fields, 'customer_name', fullName);
   put(fields, 'order_total', str(c.total_price));
   put(fields, 'currency', str(c.presentment_currency) || str(c.currency));
-  const { summary, count } = summariseItems(c.line_items);
+  const { summary, productName, count } = summariseItems(c.line_items);
   put(fields, 'item_summary', summary);
+  put(fields, 'product_name', productName);
   if (count > 0) fields.item_count = String(count);
   const recoverUrl = str(c.abandoned_checkout_url);
   put(fields, 'checkout_url', recoverUrl);
