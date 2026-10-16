@@ -51,7 +51,7 @@ URL-button `{{1}}` — maps to one of:
 
 - Customer first name / full name
 - Order name (the order's `name`, e.g. `#1042`), order total, currency
-- Item summary, item count
+- Item summary, product name (first item only, e.g. "your Pearl Drop Earrings are waiting"), item count
 - Order URL (the order's `order_status_url`), or its path for a URL
   button
 - Payment mode (`Cash on Delivery` or `Prepaid`)

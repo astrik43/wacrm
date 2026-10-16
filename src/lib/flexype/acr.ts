@@ -155,6 +155,7 @@ export function parseFlexypeAbandonedCheckout(
   let total = 0;
   let hasTotal = false;
   let first = '';
+  let productName = '';
   let picture = '';
   for (const raw of items) {
     const item = obj(raw);
@@ -175,6 +176,7 @@ export function parseFlexypeAbandonedCheckout(
           ? `${title} (${variant})`
           : title;
       if (name) first = `${name} × ${qty}`;
+      productName = title;
     }
     if (!picture) picture = imageUrl(item.image);
   }
@@ -200,6 +202,7 @@ export function parseFlexypeAbandonedCheckout(
     'item_summary',
     sanitizeTemplateValue(first && more > 0 ? `${first} +${more} more` : first)
   );
+  put('product_name', productName);
   if (count > 0) fields.item_count = String(count);
   const checkoutUrl = str(data.checkout_url);
   put('checkout_url', checkoutUrl);

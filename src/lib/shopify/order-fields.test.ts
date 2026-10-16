@@ -51,6 +51,7 @@ describe('extractOrderFields', () => {
       order_total: '2499.00',
       currency: 'INR',
       item_summary: 'Aviator sunglasses × 1 +1 more',
+      product_name: 'Aviator sunglasses',
       item_count: '3',
       order_status_url:
         'https://shop.example.com/12345/orders/abc123/authenticate?key=xyz',
@@ -179,6 +180,7 @@ describe('extractCheckoutFields', () => {
       order_total: '1599.00',
       currency: 'INR',
       item_summary: 'Heritage Watch × 1',
+      product_name: 'Heritage Watch',
       item_count: '1',
       checkout_url:
         'https://shop.example.com/12345/checkouts/ac/abc/recover?key=xyz',

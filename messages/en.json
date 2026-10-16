@@ -2101,6 +2101,7 @@
         "order_total": "Order total",
         "currency": "Currency",
         "item_summary": "Item summary",
+        "product_name": "Product name (first item)",
         "item_count": "Item count",
         "order_status_url": "Order URL (order status page)",
         "order_status_url_path": "Order URL (button suffix)",

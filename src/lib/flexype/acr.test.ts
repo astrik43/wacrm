@@ -68,6 +68,7 @@ describe('parseFlexypeAbandonedCheckout', () => {
         order_total: '1799.00',
         currency: 'INR',
         item_summary: 'Solitaire Ring (Gold / 7) × 1 +1 more',
+        product_name: 'Solitaire Ring',
         item_count: '3',
         checkout_url: 'https://checkout.flexype.io/abc123xyz?x=1',
         checkout_url_path: 'abc123xyz?x=1',
@@ -88,6 +89,7 @@ describe('parseFlexypeAbandonedCheckout', () => {
         customer_first_name: 'Asha',
         order_total: '799.00',
         item_summary: 'Earrings × 1',
+        product_name: 'Earrings',
         product_image_url: 'https://cdn.shopify.com/e.jpg',
       },
     });
