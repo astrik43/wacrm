@@ -167,8 +167,8 @@ payment mode, with two buttons:
 
 | Button | Tag added to the Shopify order |
 | --- | --- |
-| Confirm order | `COD confirmed` |
-| Cancel order | `cancelled by WA CRM` |
+| Confirm order | `WHATSAPP CONFIRMED` |
+| Cancel order | `WHATSAPP CANCELLED` |
 
 - **Cancel only tags the order.** It does not cancel it in Shopify; act
   on the tag yourself or with a Shopify Flow.

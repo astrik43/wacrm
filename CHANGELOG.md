@@ -105,6 +105,10 @@ and when the shipment is out for delivery or delivered.
   signed per shipment/order, so it is not an open redirect. No
   migration.
 
+- **Shopify: COD tag names.** The confirmation page now tags orders
+  `WHATSAPP CONFIRMED` / `WHATSAPP CANCELLED` (were `COD confirmed` /
+  `cancelled by WA CRM`). Orders tagged before keep their old tag.
+
 ## [0.8.1] — 2026-07-10
 
 Fixes inbound chats fragmenting into multiple threads for the same
