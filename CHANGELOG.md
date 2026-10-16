@@ -105,6 +105,11 @@ and when the shipment is out for delivery or delivered.
   signed per shipment/order, so it is not an open redirect. No
   migration.
 
+- **Shopify / FlexyPe: cart reminder button links.** Cart reminder
+  templates can use the same `https://<CRM>/r/{{1}}` button, mapped to
+  *Cart via CRM link*; it opens the abandoned checkout's own link,
+  whichever checkout (Shopify or FlexyPe) the store uses. No migration.
+
 - **Shopify: COD tag names.** The confirmation page now tags orders
   `WHATSAPP CONFIRMED` / `WHATSAPP CANCELLED` (were `COD confirmed` /
   `cancelled by WA CRM`). Orders tagged before keep their old tag.

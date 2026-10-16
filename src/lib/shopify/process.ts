@@ -358,6 +358,8 @@ async function handleCheckout(
     existing?.fields?.product_image_url ??
     (await fetchLineItemImage(db, config, firstLineItemRef(checkout)));
   if (imageUrl) fields.product_image_url = imageUrl;
+  const checkoutLink = makeLinkCode('c', accountId, checkoutId);
+  if (checkoutLink) fields.checkout_link_code = checkoutLink;
 
   const phone = orderPhone(checkout, config.default_country_code);
   const { error } = await db.from('shopify_checkouts').upsert(
@@ -460,6 +462,8 @@ export async function processFlexypeCheckout(
     const imageUrl = await fetchLineItemImage(db, config, cart.lineItem);
     if (imageUrl) fields.product_image_url = imageUrl;
   }
+  const checkoutLink = makeLinkCode('c', accountId, cart.checkoutId);
+  if (checkoutLink) fields.checkout_link_code = checkoutLink;
 
   // Kept for the cron: it reads the checkout's creation time ("has
   // this phone ordered since?") and its latest fields at send time.

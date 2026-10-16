@@ -9,6 +9,7 @@
 //   t… → the shipment's tracking link (falling back to the order's
 //        status page while the courier hasn't given one yet)
 //   s… → the order's status page
+//   c… → the abandoned checkout's cart link (FlexyPe or Shopify)
 //
 // Public — customers open it from WhatsApp. Anything unknown, unsigned
 // or without a link gets a plain "link not available" page, never a
@@ -26,7 +27,7 @@ import {
   type ParsedLinkCode,
 } from '@/lib/shopify/link-codes';
 
-const NOT_FOUND_HTML = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Link not available</title><style>body{font-family:system-ui,sans-serif;margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f6f6f4;color:#222}main{max-width:22rem;padding:2rem 1.5rem;text-align:center}h1{font-size:1.15rem;margin:0 0 .5rem}p{margin:0;color:#666;font-size:.95rem;line-height:1.45}</style></head><body><main><h1>This link isn't available yet</h1><p>Tracking details appear once your parcel is handed to the courier. Please try again a little later, or reply to our WhatsApp message.</p></main></body></html>`;
+const NOT_FOUND_HTML = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Link not available</title><style>body{font-family:system-ui,sans-serif;margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f6f6f4;color:#222}main{max-width:22rem;padding:2rem 1.5rem;text-align:center}h1{font-size:1.15rem;margin:0 0 .5rem}p{margin:0;color:#666;font-size:.95rem;line-height:1.45}</style></head><body><main><h1>This link isn't available yet</h1><p>Tracking details appear once your parcel is handed to the courier, and a cart link stops working once its checkout expires. Please try again a little later, or reply to our WhatsApp message.</p></main></body></html>`;
 
 function notAvailable(status = 404): Response {
   return new Response(NOT_FOUND_HTML, {
@@ -79,6 +80,21 @@ async function resolve(db: Db, parsed: ParsedLinkCode): Promise<string | null> {
     if (!row) return null;
     if (isRedirectableUrl(row.tracking_url)) return row.tracking_url;
     return orderStatusUrl(db, row.account_id, row.shopify_order_id);
+  }
+
+  if (parsed.kind === 'c') {
+    const { data } = await db
+      .from('shopify_checkouts')
+      .select('account_id, fields')
+      .eq('shopify_checkout_id', parsed.id)
+      .limit(5);
+    const rows =
+      (data as
+        | { account_id: string; fields: { checkout_url?: unknown } | null }[]
+        | null) ?? [];
+    const row = rows.find((r) => linkCodeMatches(parsed, r.account_id));
+    const url = row?.fields?.checkout_url;
+    return isRedirectableUrl(url) ? url : null;
   }
 
   const { data } = await db

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const db = vi.hoisted(() => ({
   fulfillments: [] as Record<string, unknown>[],
   orders: [] as Record<string, unknown>[],
+  checkouts: [] as Record<string, unknown>[],
   orderFields: null as Record<string, unknown> | null,
   limited: false,
 }));
@@ -19,7 +20,12 @@ vi.mock('@/lib/flows/admin-client', () => ({
         select: () => builder,
         eq: () => builder,
         limit: async () => ({
-          data: table === 'shopify_fulfillments' ? db.fulfillments : db.orders,
+          data:
+            table === 'shopify_fulfillments'
+              ? db.fulfillments
+              : table === 'shopify_checkouts'
+                ? db.checkouts
+                : db.orders,
           error: null,
         }),
         maybeSingle: async () => ({
@@ -47,6 +53,7 @@ function open(code: string) {
 beforeEach(() => {
   db.fulfillments = [];
   db.orders = [];
+  db.checkouts = [];
   db.orderFields = null;
   db.limited = false;
   vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -78,6 +85,22 @@ describe('GET /r/<code>', () => {
     const res = await open(makeLinkCode('s', 'acct-1', '1001')!);
     expect(res.status).toBe(302);
     expect(res.headers.get('location')).toBe(STATUS);
+  });
+
+  it("sends a cart code to the checkout's own link", async () => {
+    const CART = 'https://checkout.flexype.io/abc123xyz';
+    db.checkouts = [
+      { account_id: 'acct-2', fields: { checkout_url: 'https://evil.example' } },
+      { account_id: 'acct-1', fields: { checkout_url: CART } },
+    ];
+    const res = await open(makeLinkCode('c', 'acct-1', 'flexype:abc123xyz')!);
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location')).toBe(CART);
+
+    db.checkouts = [{ account_id: 'acct-1', fields: {} }];
+    expect(
+      (await open(makeLinkCode('c', 'acct-1', 'flexype:abc123xyz')!)).status
+    ).toBe(404);
   });
 
   it('never redirects a code signed for another account, a bad code, or a non-web link', async () => {

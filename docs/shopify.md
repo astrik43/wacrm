@@ -74,16 +74,20 @@ Use the CRM's own redirect link as the base instead:
 |---|---|---|
 | Track order | `https://<your CRM domain>/r/{{1}}` | *Tracking via CRM link (button suffix)* |
 | View order | `https://<your CRM domain>/r/{{1}}` | *Order page via CRM link (button suffix)* |
+| Complete my order (cart reminders) | `https://<your CRM domain>/r/{{1}}` | *Cart via CRM link (button suffix)* |
 
 For the example URL Meta asks for, use
 `https://<your CRM domain>/r/t7296329941302.Kx3vQ9aL2mWp8RtY`.
 
-When the customer taps it, the CRM looks up that shipment (or order)
-and redirects to its link **as it is at that moment** — so changing
+For a cart reminder's example, use
+`https://<your CRM domain>/r/cZmxleHlwZTphYmMxMjN4eXo.Mq7wR2xLp9TzK4vB`.
+
+When the customer taps it, the CRM looks up that shipment, order or
+abandoned checkout (Shopify or FlexyPe) and redirects to its link **as it is at that moment** — so changing
 courier or tracking partner needs no template change, and a tracking
 link Shopify adds or changes later is picked up. A shipment without a
 tracking link yet goes to the order page instead. Each code is signed
-for one shipment or order of your store, so the link can't be used to
+for one shipment, order or checkout of your store, so the link can't be used to
 send people anywhere else.
 
 The older way still works: your store as the base

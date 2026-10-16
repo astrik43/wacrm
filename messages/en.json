@@ -2091,6 +2091,7 @@
         "cod_confirm_token": "COD confirmation page (button suffix)",
         "cod_confirm_url": "COD confirmation page link",
         "order_link_code": "Order page via CRM link (button suffix for /r/…)",
+        "checkout_link_code": "Cart via CRM link (button suffix for /r/…)",
         "checkout_url": "Checkout recovery link",
         "checkout_url_path": "Checkout recovery link (button suffix)",
         "customer_first_name": "Customer first name",

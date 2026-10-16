@@ -2073,6 +2073,7 @@
         "cod_confirm_token": "Página de confirmação de COD (sufixo do botão)",
         "cod_confirm_url": "Link da página de confirmação de COD",
         "order_link_code": "Página do pedido pelo link do CRM (sufixo do botão /r/…)",
+        "checkout_link_code": "Carrinho pelo link do CRM (sufixo do botão /r/…)",
         "checkout_url": "Link de recuperação do checkout",
         "checkout_url_path": "Link de recuperação do checkout (sufixo do botão)",
         "customer_first_name": "Primeiro nome do cliente",

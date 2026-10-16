@@ -35,6 +35,24 @@ describe('link codes', () => {
     expect(linkCodeMatches(forged, 'acct-1')).toBe(false);
   });
 
+  it('carries a non-numeric checkout key, signed like the others', () => {
+    const code = makeLinkCode('c', 'acct-1', 'flexype:sess_9f8e-7d6c')!;
+    expect(code).toMatch(/^c[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{16}$/);
+    const parsed = parseLinkCode(code)!;
+    expect(parsed).toMatchObject({ kind: 'c', id: 'flexype:sess_9f8e-7d6c' });
+    expect(linkCodeMatches(parsed, 'acct-1')).toBe(true);
+    expect(linkCodeMatches(parsed, 'acct-2')).toBe(false);
+
+    // Another checkout's key under the same signature doesn't verify.
+    const sig = code.split('.')[1];
+    const other = Buffer.from('flexype:other').toString('base64url');
+    expect(linkCodeMatches(parseLinkCode(`c${other}.${sig}`)!, 'acct-1')).toBe(false);
+    // Nor does a shipment code reread as a cart.
+    const ship = makeLinkCode('t', 'acct-1', '1001')!;
+    expect(parseLinkCode(`c${ship.slice(1)}`)).toBeNull();
+    expect(makeLinkCode('c', 'acct-1', 'x'.repeat(121))).toBeNull();
+  });
+
   it('only parses well-formed codes', () => {
     for (const bad of [
       null,
