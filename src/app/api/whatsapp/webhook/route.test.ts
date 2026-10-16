@@ -1011,4 +1011,33 @@ describe('status webhook: failed statuses keep Meta\'s reason (#535)', () => {
     expect(h.state.recipientUpdates[0]).not.toHaveProperty('error_message')
     expect(h.state.recipientUpdates[0]).not.toHaveProperty('error_code')
   })
+
+  it("records Meta's pricing for the number's account (Transaction Details)", async () => {
+    await runStatusWebhook({
+      id: 'wamid.OUT2',
+      status: 'delivered',
+      timestamp: '1700000200',
+      recipient_id: '919029130001',
+      pricing: {
+        billable: true,
+        pricing_model: 'PMP',
+        category: 'UTILITY',
+        type: 'regular',
+      },
+    })
+    const charge = h.state.rpcCalls.find((c) => c.name === 'record_message_status')
+    expect(charge?.args).toMatchObject({
+      p_account_id: 'acc-1',
+      p_message_id: 'wamid.OUT2',
+      p_recipient: '919029130001',
+      p_status: 'delivered',
+      p_at: new Date(1700000200 * 1000).toISOString(),
+      p_category: 'utility',
+      p_pricing_type: 'regular',
+      p_billable: true,
+      p_error_code: null,
+    })
+    // The inbox mirror is unchanged.
+    expect(h.state.messageUpdates).toEqual([{ status: 'delivered' }])
+  })
 })

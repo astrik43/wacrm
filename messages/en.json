@@ -26,6 +26,7 @@
     "automations": "Automations",
     "flows": "Flows",
     "aiAgents": "AI Agents",
+    "transactions": "Transaction Details",
     "settings": "Settings",
     "beta": "Beta",
     "unreadConversations": "{count} unread {count, plural, =1 {conversation} other {conversations}}",
@@ -2378,5 +2379,74 @@
   },
   "DashboardShell": {
     "loading": "Loading..."
+  },
+  "Transactions": {
+    "title": "Transaction Details",
+    "subtitle": "Every WhatsApp message sent from this CRM, with its delivery status and what Meta charges for it.",
+    "adminOnly": "Only admins can view transaction details.",
+    "loadFailed": "Couldn't load transactions",
+    "metaInvoices": "Meta invoices",
+    "downloadCsv": "Download CSV",
+    "from": "From",
+    "to": "To",
+    "status": "Status",
+    "category": "Category",
+    "all": "All",
+    "statuses": {
+      "sent": "Sent",
+      "delivered": "Delivered",
+      "read": "Read",
+      "failed": "Failed"
+    },
+    "categories": {
+      "marketing": "Marketing",
+      "marketing_lite": "Marketing lite",
+      "utility": "Utility",
+      "authentication": "Authentication",
+      "authentication_international": "Authentication (intl.)",
+      "service": "Service",
+      "referral_conversion": "Free entry point",
+      "unknown": "Unknown"
+    },
+    "pricingTypes": {
+      "free_customer_service": "Free (24-hour window)",
+      "free_entry_point": "Free (entry point)"
+    },
+    "sources": {
+      "shopify": "Shopify",
+      "broadcast": "Broadcast",
+      "automation": "Automation",
+      "inbox": "Inbox reply",
+      "other": "Other"
+    },
+    "cards": {
+      "messages": "Messages",
+      "billable": "Charged messages",
+      "cost": "Estimated cost (excl. GST)",
+      "total": "Estimated total (incl. GST)",
+      "gst": "GST 18%: {amount}"
+    },
+    "estimateNote": "Amounts are estimates from Meta's India rates: ₹0.8631 marketing, ₹0.115 utility and authentication, per delivered message. Meta's invoice is the official bill. Rows marked “est.” were sent before charge tracking started, so their category is the template's.",
+    "empty": "No messages in this period.",
+    "table": {
+      "sentAt": "Sent",
+      "recipient": "Recipient",
+      "template": "Template",
+      "source": "Source",
+      "order": "Order",
+      "status": "Status",
+      "category": "Meta category",
+      "amount": "Amount"
+    },
+    "freeForm": "Free-form ({type})",
+    "followUp": "{name} · follow-up {step}",
+    "test": "Test",
+    "readAt": "Read {time}",
+    "deliveredAt": "Delivered {time}",
+    "estimated": "est.",
+    "free": "Free",
+    "pageOf": "Page {page} of {pages} · {total} messages",
+    "previous": "Previous page",
+    "next": "Next page"
   }
 }

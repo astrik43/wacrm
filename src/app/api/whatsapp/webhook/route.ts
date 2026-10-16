@@ -13,6 +13,7 @@ import {
 } from '@/lib/whatsapp/wa-identity'
 import { findExistingContact, isUniqueViolation } from '@/lib/contacts/dedupe'
 import { reopenClosedConversation } from '@/lib/conversations/reopen'
+import { recordMessageStatus } from '@/lib/billing/charges'
 import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
 import { runAutomationsForTrigger } from '@/lib/automations/engine'
 import { dispatchInboundToFlows } from '@/lib/flows/engine'
@@ -128,6 +129,8 @@ interface WhatsAppWebhookEntry {
          * explanation. See #535.
          */
         errors?: MetaStatusError[]
+        /** Meta's billing for this message (category, billable…). */
+        pricing?: unknown
       }>
     }
     field: string
@@ -265,6 +268,9 @@ export async function POST(request: Request) {
 
 async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
   if (!body.entry) return
+  // Account per phone_number_id, looked up once per delivery: Meta
+  // batches many statuses for the same number into one request.
+  const accountByNumber = new Map<string, string | null>()
 
   for (const entry of body.entry) {
     for (const change of entry.changes) {
@@ -292,8 +298,15 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
 
       // Handle status updates
       if (value.statuses) {
+        const accountId = await accountForPhoneNumber(
+          accountByNumber,
+          value.metadata?.phone_number_id
+        )
         for (const status of value.statuses) {
           await handleStatusUpdate(status)
+          if (accountId) {
+            await recordMessageStatus(supabaseAdmin(), accountId, status)
+          }
         }
       }
 
@@ -406,6 +419,30 @@ function isValidStatusTransition(current: string, incoming: string): boolean {
   if (ii < 0) return false // unknown incoming status
   if (ci < 0) return true // unknown current — accept anything on the ladder
   return ii > ci
+}
+
+/** The account that owns a WhatsApp number, or null when unknown. */
+async function accountForPhoneNumber(
+  cache: Map<string, string | null>,
+  phoneNumberId: string | undefined
+): Promise<string | null> {
+  if (!phoneNumberId) return null
+  if (cache.has(phoneNumberId)) return cache.get(phoneNumberId) ?? null
+  let accountId: string | null = null
+  try {
+    const { data, error } = await supabaseAdmin()
+      .from('whatsapp_config')
+      .select('account_id')
+      .eq('phone_number_id', phoneNumberId)
+    if (error) console.error('Error resolving account for statuses:', error)
+    const rows = (data ?? []) as { account_id: string | null }[]
+    accountId = rows[0]?.account_id ?? null
+  } catch (err) {
+    // Charges are bookkeeping; never let them stop status handling.
+    console.error('Error resolving account for statuses:', err)
+  }
+  cache.set(phoneNumberId, accountId)
+  return accountId
 }
 
 async function handleStatusUpdate(status: {
