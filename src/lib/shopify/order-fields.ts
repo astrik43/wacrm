@@ -34,6 +34,7 @@ export const SHOPIFY_FIELD_KEYS = [
   'cod_confirm_token',
   'cod_confirm_url',
   'order_link_code',
+  'checkout_link_code',
   'checkout_url',
   'checkout_url_path',
   'product_image_url',
@@ -105,6 +106,11 @@ export const SHOPIFY_FIELDS: Record<ShopifyFieldKey, FieldMeta> = {
   order_link_code: {
     sample: 's18943104778550.Zk3vX9aQ2mLw8RtY',
     events: ORDER_EVENTS,
+  },
+  // Same, for the abandoned cart's checkout link.
+  checkout_link_code: {
+    sample: 'cZmxleHlwZTphYmMxMjN4eXo.Mq7wR2xLp9TzK4vB',
+    events: CART_EVENTS,
   },
   checkout_url: {
     sample: 'https://example.myshopify.com/checkouts/abc123/recover?key=xyz',

@@ -2091,6 +2091,7 @@
         "cod_confirm_token": "COD 확인 페이지 (버튼 접미사)",
         "cod_confirm_url": "COD 확인 페이지 링크",
         "order_link_code": "CRM 링크로 주문 페이지 (/r/… 버튼 접미사)",
+        "checkout_link_code": "CRM 링크로 장바구니 (/r/… 버튼 접미사)",
         "checkout_url": "결제 복구 링크",
         "checkout_url_path": "결제 복구 링크 (버튼 접미사)",
         "customer_first_name": "고객 이름",

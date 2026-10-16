@@ -7,6 +7,7 @@ vi.mock('./notify', () => ({ notifyShopifyEvent: mocks.notify }));
 vi.mock('./admin-api', () => ({ fetchLineItemImage: mocks.fetchImage }));
 
 import type { ShopifyConfigRow } from './config';
+import { parseLinkCode } from './link-codes';
 import { processFlexypeCheckout, processShopifyWebhook } from './process';
 
 const CONFIG: ShopifyConfigRow = {
@@ -609,6 +610,10 @@ describe('processShopifyWebhook — abandoned checkouts', () => {
     expect(mocks.notify.mock.calls[0][2].fields.checkout_url_path).toBe(
       '1/checkouts/ac/abc/recover?key=k'
     );
+    // The CRM's own /r/ code for this cart, kept with the checkout.
+    expect(
+      parseLinkCode(mocks.notify.mock.calls[0][2].fields.checkout_link_code)
+    ).toMatchObject({ kind: 'c', id: '981820079255243500' });
     expect(result.outcomes).toHaveLength(3);
     expect(result.outcomes[0]).toEqual({
       event: 'cart_reminder_1',
@@ -742,6 +747,12 @@ describe('FlexyPe abandoned checkouts', () => {
       orderName: 'Dinesh Kumar',
       webhookId: 'evt-1',
     });
+    expect(
+      parseLinkCode(
+        (state.checkoutUpserts[0].row.fields as Record<string, unknown>)
+          .checkout_link_code
+      )
+    ).toMatchObject({ kind: 'c', id: 'flexype:sess-1' });
     // FlexyPe sent a picture: no Shopify lookup.
     expect(mocks.fetchImage).not.toHaveBeenCalled();
     expect(result.outcomes).toHaveLength(3);
