@@ -185,6 +185,18 @@ BEGIN
       'shopify_configs.flexype_* columns are missing — migration 047 did not apply';
   END IF;
 
+  -- WhatsApp message charges (050). Read by the Transaction Details
+  -- page; written by the status webhook through record_message_status.
+  IF to_regclass('public.message_charges') IS NULL THEN
+    RAISE EXCEPTION 'message_charges is missing — migration 050 did not apply';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_proc WHERE proname = 'record_message_status'
+  ) THEN
+    RAISE EXCEPTION
+      'record_message_status() is missing — migration 050 did not apply';
+  END IF;
+
   RAISE NOTICE 'schema verification passed';
 END
 $$;

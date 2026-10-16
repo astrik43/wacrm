@@ -94,9 +94,21 @@ and when the shipment is out for delivery or delivered.
   edited to a chosen number immediately, using the latest order's
   values.
 
+> **Migration required:** apply `supabase/migrations/050_message_charges.sql`
+> (new `message_charges` table and `record_message_status` function;
+> backfills past outbound messages). Apply it **before** deploying.
+
 > **Migration required:** apply `supabase/migrations/049_shopify_test_mode.sql`
 > (`test_mode` and `test_phones` on `shopify_configs`, `is_test` on
 > `shopify_notifications`). Apply it **before** deploying this version.
+
+- **Transaction Details.** A new sidebar page (admins) lists every
+  WhatsApp message the CRM sent: recipient, template, source (Shopify
+  update, broadcast, automation, inbox reply), Shopify order, delivery
+  status, Meta's billing category and an estimated amount from Meta's
+  India rates, with period totals incl. GST and a CSV download. Meta's
+  status webhooks now record each message's pricing. Meta's invoice
+  stays the official bill; the page links to it.
 
 - **Shopify: the CRM's own button links.** A template button set to
   `https://<CRM>/r/{{1}}` can open a shipment's tracking page or an

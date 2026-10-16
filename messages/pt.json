@@ -26,6 +26,7 @@
     "automations": "Automações",
     "flows": "Fluxos",
     "aiAgents": "Agentes de IA",
+    "transactions": "Detalhes de transações",
     "settings": "Configurações",
     "beta": "Beta",
     "unreadConversations": "{count} {count, plural, =1 {conversa não lida} other {conversas não lidas}}",
@@ -2360,5 +2361,74 @@
   },
   "DashboardShell": {
     "loading": "Carregando..."
+  },
+  "Transactions": {
+    "title": "Detalhes de transações",
+    "subtitle": "Todas as mensagens de WhatsApp enviadas por este CRM, com o status de entrega e o que a Meta cobra por elas.",
+    "adminOnly": "Apenas administradores podem ver os detalhes de transações.",
+    "loadFailed": "Não foi possível carregar as transações",
+    "metaInvoices": "Faturas da Meta",
+    "downloadCsv": "Baixar CSV",
+    "from": "De",
+    "to": "Até",
+    "status": "Status",
+    "category": "Categoria",
+    "all": "Todos",
+    "statuses": {
+      "sent": "Enviada",
+      "delivered": "Entregue",
+      "read": "Lida",
+      "failed": "Falhou"
+    },
+    "categories": {
+      "marketing": "Marketing",
+      "marketing_lite": "Marketing lite",
+      "utility": "Utilidade",
+      "authentication": "Autenticação",
+      "authentication_international": "Autenticação (intl.)",
+      "service": "Serviço",
+      "referral_conversion": "Ponto de entrada gratuito",
+      "unknown": "Desconhecida"
+    },
+    "pricingTypes": {
+      "free_customer_service": "Grátis (janela de 24 horas)",
+      "free_entry_point": "Grátis (ponto de entrada)"
+    },
+    "sources": {
+      "shopify": "Shopify",
+      "broadcast": "Transmissão",
+      "automation": "Automação",
+      "inbox": "Resposta na caixa de entrada",
+      "other": "Outro"
+    },
+    "cards": {
+      "messages": "Mensagens",
+      "billable": "Mensagens cobradas",
+      "cost": "Custo estimado (sem GST)",
+      "total": "Total estimado (com GST)",
+      "gst": "GST 18%: {amount}"
+    },
+    "estimateNote": "Os valores são estimativas pelas tarifas da Meta na Índia: ₹0,8631 marketing, ₹0,115 utilidade e autenticação, por mensagem entregue. A fatura da Meta é a cobrança oficial. Linhas marcadas como “est.” foram enviadas antes do início do registro de cobranças, então usam a categoria do modelo.",
+    "empty": "Nenhuma mensagem neste período.",
+    "table": {
+      "sentAt": "Enviada",
+      "recipient": "Destinatário",
+      "template": "Modelo",
+      "source": "Origem",
+      "order": "Pedido",
+      "status": "Status",
+      "category": "Categoria Meta",
+      "amount": "Valor"
+    },
+    "freeForm": "Livre ({type})",
+    "followUp": "{name} · acompanhamento {step}",
+    "test": "Teste",
+    "readAt": "Lida {time}",
+    "deliveredAt": "Entregue {time}",
+    "estimated": "est.",
+    "free": "Grátis",
+    "pageOf": "Página {page} de {pages} · {total} mensagens",
+    "previous": "Página anterior",
+    "next": "Próxima página"
   }
 }
