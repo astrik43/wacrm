@@ -55,9 +55,15 @@ function sampleFields(): ShopifyFields {
 
 type Db = ReturnType<typeof supabaseAdmin>;
 
+/** How many recent shipments to look through for one with a known order. */
+const SHIPMENT_SCAN = 25;
+
 /**
- * The newest shipment with tracking, with its order's values (when the
- * order is known) — what a real shipment update would carry.
+ * A recent shipment with tracking, with its order's values — what a real
+ * shipment update would carry. Shipments of orders placed before the
+ * store was connected have no stored order, so no product picture and
+ * no order page for the /r/ link; the newest one whose order is stored
+ * is preferred, falling back to the newest shipment.
  */
 async function latestShipment(
   db: Db,
@@ -71,28 +77,43 @@ async function latestShipment(
     .eq('account_id', accountId)
     .not('tracking_url', 'is', null)
     .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  const row = data as {
+    .limit(SHIPMENT_SCAN);
+  const rows = (data ?? []) as {
     shopify_fulfillment_id: string;
     shopify_order_id: string | null;
     tracking_number: string | null;
     tracking_url: string | null;
     tracking_company: string | null;
-  } | null;
-  if (!row) return null;
+  }[];
+  if (rows.length === 0) return null;
 
-  type StoredOrder = { order_name: string | null; fields: ShopifyFields | null };
-  let order: StoredOrder | null = null;
-  if (row.shopify_order_id) {
-    const { data: orderRow } = await db
+  type StoredOrder = {
+    shopify_order_id: string;
+    order_name: string | null;
+    fields: ShopifyFields | null;
+  };
+  const orderIds = [
+    ...new Set(
+      rows.map((r) => r.shopify_order_id).filter((id): id is string => !!id)
+    ),
+  ];
+  const orders = new Map<string, StoredOrder>();
+  if (orderIds.length > 0) {
+    const { data: orderRows } = await db
       .from('shopify_orders')
-      .select('order_name, fields')
+      .select('shopify_order_id, order_name, fields')
       .eq('account_id', accountId)
-      .eq('shopify_order_id', row.shopify_order_id)
-      .maybeSingle();
-    order = (orderRow as StoredOrder | null) ?? null;
+      .in('shopify_order_id', orderIds);
+    for (const order of (orderRows ?? []) as StoredOrder[]) {
+      orders.set(order.shopify_order_id, order);
+    }
   }
+  const row =
+    rows.find((r) => r.shopify_order_id && orders.has(r.shopify_order_id)) ??
+    rows[0];
+  const order = row.shopify_order_id
+    ? (orders.get(row.shopify_order_id) ?? null)
+    : null;
 
   const tracking: ShopifyFields = {};
   if (row.tracking_number) tracking.tracking_number = row.tracking_number;

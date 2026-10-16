@@ -5,7 +5,8 @@ const mocks = vi.hoisted(() => ({
   resolveTemplateRow: vi.fn(),
   sendTest: vi.fn(),
   latest: null as Record<string, unknown> | null,
-  shipment: null as Record<string, unknown> | null,
+  shipments: [] as Record<string, unknown>[],
+  shipmentOrders: [] as Record<string, unknown>[],
   tables: [] as string[],
 }));
 
@@ -34,19 +35,35 @@ vi.mock('@/lib/flows/admin-client', () => ({
   supabaseAdmin: () => ({
     from(table: string) {
       mocks.tables.push(table);
+      let listed = false;
       const builder: Record<string, unknown> = {
         select: () => builder,
         eq: () => builder,
         order: () => builder,
         not: () => builder,
-        limit: () => builder,
+        in: () => {
+          listed = true;
+          return builder;
+        },
+        limit: () => {
+          if (table === 'shopify_fulfillments') listed = true;
+          return builder;
+        },
+        // Lists: shipments, and the stored orders of those shipments.
+        then: (resolve: (value: unknown) => unknown) =>
+          resolve({
+            data: !listed
+              ? null
+              : table === 'shopify_fulfillments'
+                ? mocks.shipments
+                : mocks.shipmentOrders,
+            error: null,
+          }),
         maybeSingle: async () => ({
           data:
             table === 'shopify_configs'
               ? { default_country_code: '91' }
-              : table === 'shopify_fulfillments'
-                ? mocks.shipment
-                : mocks.latest,
+              : mocks.latest,
           error: null,
         }),
       };
@@ -94,7 +111,8 @@ function post(body: unknown) {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.latest = null;
-  mocks.shipment = null;
+  mocks.shipments = [];
+  mocks.shipmentOrders = [];
   mocks.tables = [];
   mocks.requireRole.mockResolvedValue({
     supabase: {},
@@ -189,17 +207,23 @@ describe('POST /api/shopify/events/test', () => {
   });
 
   it("uses the latest shipment's real tracking link for a shipment update", async () => {
-    mocks.shipment = {
-      shopify_order_id: '1001',
-      tracking_number: '7D139859784',
-      tracking_url:
-        'https://www.ithinklogistics.com/track-order-status?tracking_number=7D139859784',
-      tracking_company: 'dtdc',
-    };
-    mocks.latest = {
-      order_name: '#EL1650',
-      fields: { customer_first_name: 'Md', order_number: '#EL1650' },
-    };
+    mocks.shipments = [
+      {
+        shopify_fulfillment_id: '5001',
+        shopify_order_id: '1001',
+        tracking_number: '7D139859784',
+        tracking_url:
+          'https://www.ithinklogistics.com/track-order-status?tracking_number=7D139859784',
+        tracking_company: 'dtdc',
+      },
+    ];
+    mocks.shipmentOrders = [
+      {
+        shopify_order_id: '1001',
+        order_name: '#EL1650',
+        fields: { customer_first_name: 'Md', order_number: '#EL1650' },
+      },
+    ];
     await post(BODY);
     const input = mocks.sendTest.mock.calls[0][2];
     expect(mocks.tables).toContain('shopify_fulfillments');
@@ -211,6 +235,54 @@ describe('POST /api/shopify/events/test', () => {
       tracking_company: 'dtdc',
       customer_first_name: 'Md',
     });
+  });
+
+  it('prefers a shipment whose order is stored, for its picture', async () => {
+    mocks.shipments = [
+      {
+        shopify_fulfillment_id: '5003',
+        shopify_order_id: '1003',
+        tracking_number: 'NEWEST',
+        tracking_url: 'https://track.example/NEWEST',
+        tracking_company: 'dtdc',
+      },
+      {
+        shopify_fulfillment_id: '5002',
+        shopify_order_id: '1002',
+        tracking_number: 'KNOWN',
+        tracking_url: 'https://track.example/KNOWN',
+        tracking_company: 'dtdc',
+      },
+    ];
+    mocks.shipmentOrders = [
+      {
+        shopify_order_id: '1002',
+        order_name: '#EL1700',
+        fields: {
+          order_number: '#EL1700',
+          product_image_url: 'https://cdn.shopify.com/s/files/real.jpg',
+        },
+      },
+    ];
+    await post(BODY);
+    const input = mocks.sendTest.mock.calls[0][2];
+    expect(input.orderName).toBe('Test · #EL1700');
+    expect(input.fields).toMatchObject({
+      tracking_number: 'KNOWN',
+      product_image_url: 'https://cdn.shopify.com/s/files/real.jpg',
+    });
+
+    // No stored order at all: still the newest shipment.
+    mocks.shipmentOrders = [];
+    vi.clearAllMocks();
+    mocks.sendTest.mockResolvedValue({ status: 'sent', messageId: 'm-2' });
+    mocks.resolveTemplateRow.mockResolvedValue({
+      row: TEMPLATE,
+      malformed: false,
+      language: 'en',
+    });
+    await post(BODY);
+    expect(mocks.sendTest.mock.calls[0][2].fields.tracking_number).toBe('NEWEST');
   });
 
   it('does not look for a shipment for an order update', async () => {
