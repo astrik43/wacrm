@@ -958,7 +958,7 @@ describe('automatic contact tags', () => {
   };
   const tagCall = (i = 0) => mocks.applyTags.mock.calls[i];
 
-  it('tags a new order as placed, with how it was paid, and clears the abandoned cart', async () => {
+  it('tags a new order with how it was paid, and clears the old status and abandoned cart', async () => {
     const state = freshState();
     await processShopifyWebhook(
       fakeDb(state),
@@ -969,11 +969,11 @@ describe('automatic contact tags', () => {
     );
     expect(tagCall()[1]).toBe('acct-1');
     expect(tagCall()[2]).toBe('919876543210');
-    expect(tagCall()[4].add).toEqual(['Order placed', 'COD buyer']);
+    expect(tagCall()[4].add).toEqual(['Order placed COD']);
     expect(tagCall()[4].remove).toEqual(
       expect.arrayContaining(['Delivered', 'RTO', 'Cancelled', 'Abandoned cart'])
     );
-    expect(tagCall()[4].remove).not.toContain('Order placed');
+    expect(tagCall()[4].remove).not.toContain('Order placed COD');
   });
 
   it('tags a cancellation', async () => {

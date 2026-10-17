@@ -1,17 +1,20 @@
 // ============================================================
 // Automatic contact tags from Shopify / FlexyPe behaviour, so
-// broadcasts can target "delivered customers", "RTO", "COD buyers"…
+// broadcasts can target "delivered customers", "RTO", "COD orders"…
 //
 // Two kinds of tag:
 //
-//   Order status (one at a time — the latest order's state)
-//     Order placed → Shipped → Out for delivery → Delivery attempted
-//     → Delivered, or RTO / Cancelled. Setting one removes the others.
-//
 //   Lasting
-//     COD buyer / Prepaid buyer — added on every order, never removed.
+//     Order placed COD / Order placed Prepaid — added on every order by
+//     how it is paid, never removed, so a broadcast can reach everyone
+//     who ever ordered that way.
 //     Abandoned cart — added when a cart is abandoned, removed when
 //     the customer places an order.
+//
+//   Shipment status (one at a time — the latest order's state)
+//     Shipped → Out for delivery → Delivery attempted → Delivered, or
+//     RTO / Cancelled. Setting one removes the others; a new order
+//     clears the previous order's status.
 //
 // Tags are ordinary account tags (created on first use), added through
 // the same path as a manual tag, so "tag added" automations fire too.
@@ -30,7 +33,6 @@ import { resolveImportTagIds } from '@/lib/contacts/resolve-import-tags';
 import type { PaymentMode } from './events';
 
 export const ORDER_STATUS_TAGS = {
-  placed: 'Order placed',
   shipped: 'Shipped',
   out_for_delivery: 'Out for delivery',
   attempted: 'Delivery attempted',
@@ -42,8 +44,8 @@ export const ORDER_STATUS_TAGS = {
 export type OrderStatusTag = keyof typeof ORDER_STATUS_TAGS;
 
 export const BUYER_TAGS: Record<PaymentMode, string> = {
-  cod: 'COD buyer',
-  prepaid: 'Prepaid buyer',
+  cod: 'Order placed COD',
+  prepaid: 'Order placed Prepaid',
 };
 
 export const ABANDONED_CART_TAG = 'Abandoned cart';
@@ -62,12 +64,14 @@ export function statusTagChange(status: OrderStatusTag): TagChange {
   };
 }
 
-/** Tags for a newly placed order. */
+/**
+ * Tags for a newly placed order: its lasting payment tag; the previous
+ * order's shipment status and any abandoned cart no longer apply.
+ */
 export function orderPlacedTags(paymentMode: PaymentMode): TagChange {
-  const status = statusTagChange('placed');
   return {
-    add: [...status.add, BUYER_TAGS[paymentMode]],
-    remove: [...status.remove, ABANDONED_CART_TAG],
+    add: [BUYER_TAGS[paymentMode]],
+    remove: [...Object.values(ORDER_STATUS_TAGS), ABANDONED_CART_TAG],
   };
 }
 
