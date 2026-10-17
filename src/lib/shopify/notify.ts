@@ -174,6 +174,34 @@ export async function pickEventSteps(
   return { rows: own.length > 0 ? own : ofVariant('all'), error: false };
 }
 
+
+/**
+ * A send that failed leaves the conversation it resolved with no
+ * message at all — an inbox row reading "No messages yet" for a
+ * customer who never got anything. Remove it while it is still empty;
+ * the contact stays (it carries the Shopify customer's details).
+ */
+async function dropIfEmpty(
+  db: SupabaseClient,
+  accountId: string,
+  conversationId: string
+): Promise<void> {
+  try {
+    const { count, error } = await db
+      .from('messages')
+      .select('id', { count: 'exact', head: true })
+      .eq('conversation_id', conversationId);
+    if (error || count !== 0) return;
+    await db
+      .from('conversations')
+      .delete()
+      .eq('id', conversationId)
+      .eq('account_id', accountId);
+  } catch (err) {
+    console.error('[shopify] empty conversation cleanup failed:', err);
+  }
+}
+
 /**
  * Send an already-claimed notification and record what happened on
  * its ledger row. Shared by the immediate path and the cron.
@@ -229,6 +257,7 @@ export async function deliverNotification(
   const params = resolveSendParams(resolved.row, mapping, input.fields);
   if (!params.ok) return skip(`missing_variable:${params.missing}`);
 
+  let conversationId: string | null = null;
   try {
     // No name passed: resolveConversationByPhone renames an EXISTING
     // contact to whatever it is given, and a Shopify checkout name must
@@ -238,6 +267,7 @@ export async function deliverNotification(
       accountId,
       input.phone
     );
+    conversationId = conversation.conversationId;
     if (conversation.contactCreated && input.customerName) {
       await db
         .from('contacts')
@@ -284,6 +314,9 @@ export async function deliverNotification(
     ).slice(0, MAX_REASON_LEN);
     console.error(`[shopify] ${input.event} send failed:`, reason);
     await finish(db, ledgerId, { status: 'failed', reason, payload: null });
+    if (conversationId) {
+      await dropIfEmpty(db, accountId, conversationId);
+    }
     return { status: 'failed', reason };
   }
 }
