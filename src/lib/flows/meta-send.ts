@@ -269,6 +269,9 @@ export async function engineSendMedia(
     sender_type: 'bot',
     content_type: args.kind,
     content_text: args.caption ?? null,
+    // The same public link Meta fetched, so the inbox can show the
+    // picture instead of "Photo unavailable".
+    media_url: args.link,
     message_id: waMessageId,
     status: 'sent',
   })

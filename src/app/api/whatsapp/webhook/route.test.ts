@@ -514,6 +514,22 @@ describe('inbound webhook: template quick-reply buttons (#478)', () => {
   })
 })
 
+describe('inbound webhook: messages the Cloud API cannot carry', () => {
+  it('explains an unsupported message instead of showing the raw type', async () => {
+    await runWebhook({
+      id: 'wamid.UNS1',
+      from: '15551230000',
+      timestamp: '1700000000',
+      type: 'unsupported',
+      unsupported: { type: 'poll' },
+      errors: [{ code: 131051, title: 'Message type unknown' }],
+    })
+    const text = h.state.upsertCalls[0].row.content_text as string
+    expect(text).toContain('not supported by WhatsApp Business (poll)')
+    expect(text).not.toContain('Unsupported message type: unsupported')
+  })
+})
+
 describe('inbound webhook: inbound media is mirrored (#466)', () => {
   const IMAGE_MESSAGE = {
     id: 'wamid.IMG1',
