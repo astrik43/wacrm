@@ -57,7 +57,7 @@ export function ReplyQuote({
          *  layout wider, shoving the contact sidebar off-screen.
          *  `break-words` also wraps long URLs that have no whitespace
          *  to break on. Issue #165. */}
-        <div className="whitespace-pre-wrap break-words text-xs text-foreground/80">
+        <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-xs text-foreground/80">
           {preview}
         </div>
       </div>
