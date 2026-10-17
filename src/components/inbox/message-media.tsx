@@ -31,7 +31,13 @@ import { useMediaBlobUrl } from "@/hooks/use-media-blob-url";
 type Translator = ReturnType<typeof useTranslations>;
 
 /** Inline media size cap, shared so the four bubbles can't drift apart. */
-const MEDIA_BOX = "max-h-64 max-w-60";
+// Capped at 15rem, and on phones at the bubble's own width: the bubble
+// is at most 75% of a full-width thread (4rem of padding around it), and
+// a fixed 15rem cap could be wider than that on a narrow or text-scaled
+// phone, so the picture spilled out. Viewport-based rather than a
+// percentage so the bubble still shrink-wraps the picture on desktop.
+const MEDIA_MAX_W = "max-w-[min(15rem,calc(75vw-3rem))]";
+const MEDIA_BOX = `max-h-64 ${MEDIA_MAX_W}`;
 
 export function MediaUnavailable({
   label,
@@ -105,7 +111,7 @@ function MediaActionButton({
 
 function MediaPlaceholder({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex h-40 w-60 items-center justify-center rounded-lg bg-muted">
+    <div className="flex h-40 w-[min(15rem,calc(75vw-3rem))] items-center justify-center rounded-lg bg-muted">
       {children}
     </div>
   );
@@ -234,7 +240,7 @@ export function MediaAudioBubble({
 
   return (
     <div className="flex items-center gap-2">
-      <audio src={message.media_url} controls className="max-w-60" />
+      <audio src={message.media_url} controls className={MEDIA_MAX_W} />
       <MediaActionButton
         icon={Download}
         label={t("download")}
