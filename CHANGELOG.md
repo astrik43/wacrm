@@ -117,6 +117,13 @@ and when the shipment is out for delivery or delivered.
   signed per shipment/order, so it is not an open redirect. No
   migration.
 
+- **Shopify / FlexyPe: automatic contact tags.** Customers are tagged
+  from their behaviour — *Order placed*, *Shipped*, *Out for delivery*,
+  *Delivery attempted*, *Delivered*, *RTO*, *Cancelled* (only the
+  latest order's status is kept), *COD buyer* / *Prepaid buyer*, and
+  *Abandoned cart* (cleared on purchase) — for broadcast audiences and
+  tag automations. No migration.
+
 - **Shopify / FlexyPe: product name field.** Templates can map
   *Product name (first item)* — just the first item's name, without
   the "× 1 +1 more" of *Item summary*. Fills for orders and carts

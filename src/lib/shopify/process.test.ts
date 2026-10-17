@@ -1,9 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-const mocks = vi.hoisted(() => ({ notify: vi.fn(), fetchImage: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  notify: vi.fn(),
+  fetchImage: vi.fn(),
+  applyTags: vi.fn(),
+}));
 
 vi.mock('./notify', () => ({ notifyShopifyEvent: mocks.notify }));
+vi.mock('./auto-tags', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./auto-tags')>()),
+  applyAutoTags: mocks.applyTags,
+}));
 vi.mock('./admin-api', () => ({ fetchLineItemImage: mocks.fetchImage }));
 
 import type { ShopifyConfigRow } from './config';
@@ -137,6 +145,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.notify.mockResolvedValue({ status: 'sent', messageId: 'm' });
   mocks.fetchImage.mockResolvedValue(null);
+  mocks.applyTags.mockResolvedValue(undefined);
 });
 
 describe('processShopifyWebhook — orders', () => {
@@ -932,5 +941,113 @@ describe('CRM redirect link codes', () => {
       tracking_link_code: expect.stringMatching(/^t255858046\./),
       order_link_code: expect.stringMatching(/^s820982911946154500\./),
     });
+  });
+});
+
+describe('automatic contact tags', () => {
+  const SHIPMENT = {
+    id: 255858046,
+    order_id: 820982911946154500,
+    name: '#1042.1',
+    status: 'success',
+    tracking_number: 'EX123',
+    tracking_url: 'https://t.example/EX123',
+    tracking_company: 'BlueDart',
+    shipment_status: null,
+    updated_at: '2026-10-12T12:00:00+05:30',
+  };
+  const tagCall = (i = 0) => mocks.applyTags.mock.calls[i];
+
+  it('tags a new order as placed, with how it was paid, and clears the abandoned cart', async () => {
+    const state = freshState();
+    await processShopifyWebhook(
+      fakeDb(state),
+      CONFIG,
+      'orders/create',
+      { ...ORDER, payment_gateway_names: ['Cash on Delivery (COD)'] },
+      null
+    );
+    expect(tagCall()[1]).toBe('acct-1');
+    expect(tagCall()[2]).toBe('919876543210');
+    expect(tagCall()[4].add).toEqual(['Order placed', 'COD buyer']);
+    expect(tagCall()[4].remove).toEqual(
+      expect.arrayContaining(['Delivered', 'RTO', 'Cancelled', 'Abandoned cart'])
+    );
+    expect(tagCall()[4].remove).not.toContain('Order placed');
+  });
+
+  it('tags a cancellation', async () => {
+    await processShopifyWebhook(
+      fakeDb(freshState()),
+      CONFIG,
+      'orders/cancelled',
+      { ...ORDER, cancelled_at: '2026-10-12T11:00:00+05:30' },
+      null
+    );
+    expect(tagCall()[4].add).toEqual(['Cancelled']);
+  });
+
+  it('tags shipment progress, including RTO that sends no message', async () => {
+    const state = freshState({
+      storedOrder: STORED_ORDER,
+      rpcResult: {
+        ...NEW,
+        was_new: false,
+        prev_tracking_number: 'EX123',
+        prev_tracking_url: 'https://t.example/EX123',
+        prev_shipment_status: 'in_transit',
+      },
+    });
+    const result = await processShopifyWebhook(
+      fakeDb(state),
+      CONFIG,
+      'fulfillments/update',
+      { ...SHIPMENT, shipment_status: 'failure' },
+      null
+    );
+    expect(mocks.notify).not.toHaveBeenCalled();
+    expect(result.note).toBe('no_change');
+    expect(tagCall()[2]).toBe('919876543210');
+    expect(tagCall()[4].add).toEqual(['RTO']);
+    expect(tagCall()[4].remove).toContain('Shipped');
+  });
+
+  it('leaves tags alone when the shipment status did not change', async () => {
+    const state = freshState({
+      storedOrder: STORED_ORDER,
+      rpcResult: {
+        ...NEW,
+        was_new: false,
+        prev_tracking_number: 'EX123',
+        prev_tracking_url: 'https://t.example/EX123',
+        prev_shipment_status: 'in_transit',
+      },
+    });
+    await processShopifyWebhook(
+      fakeDb(state),
+      CONFIG,
+      'fulfillments/update',
+      { ...SHIPMENT, shipment_status: 'in_transit' },
+      null
+    );
+    expect(mocks.applyTags).not.toHaveBeenCalled();
+  });
+
+  it('tags an abandoned FlexyPe cart', async () => {
+    await processFlexypeCheckout(
+      fakeDb(freshState()),
+      CONFIG,
+      {
+        checkoutId: 'flexype:sess-9',
+        phone: '919029130001',
+        customerName: 'Arun',
+        fields: {},
+        lineItem: null,
+        shopDomain: null,
+      },
+      null
+    );
+    expect(tagCall()[2]).toBe('919029130001');
+    expect(tagCall()[4]).toEqual({ add: ['Abandoned cart'], remove: [] });
   });
 });
