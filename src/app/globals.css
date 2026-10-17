@@ -228,3 +228,18 @@ html[data-theme="rose"] {
     @apply font-sans;
   }
 }
+/*
+ * iOS Safari zooms the page in whenever a text field under 16px gets
+ * focus (and doesn't zoom back out). Our inputs use text-sm (14px), so
+ * on touch screens form fields render at 16px instead. Unlayered and
+ * !important so it beats the text-sm utility on the field itself;
+ * desktop (mouse/trackpad) keeps the compact size, and pinch-zoom is
+ * left alone.
+ */
+@media (hover: none) and (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
