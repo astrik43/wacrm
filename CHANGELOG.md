@@ -129,11 +129,10 @@ and when the shipment is out for delivery or delivered.
   migration.
 
 - **Shopify / FlexyPe: automatic contact tags.** Customers are tagged
-  from their behaviour — *Order placed COD* / *Order placed Prepaid*
-  (permanent), one shipment-status tag (*Shipped*, *Out for delivery*,
-  *Delivery attempted*, *Delivered*, *RTO*, *Cancelled* — only the
-  latest order's), and *Abandoned cart* (cleared on purchase) — for
-  broadcast audiences and tag automations. No migration.
+  from their behaviour — *Order Placed(CoD)* / *Order Placed(Prepaid)*
+  (permanent) and *Abandoned Cart* (cleared on purchase), the names
+  Interakt used — for broadcast audiences and tag automations. No
+  migration.
 
 - **Shopify / FlexyPe: product name field.** Templates can map
   *Product name (first item)* — just the first item's name, without

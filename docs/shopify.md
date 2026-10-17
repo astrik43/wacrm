@@ -286,26 +286,24 @@ Good to know:
 ## Automatic contact tags
 
 Every customer the store reports on gets contact tags from what they
-do, so a broadcast can target them (Broadcasts → audience → tags):
+do, so a broadcast can target them (Broadcasts → audience → tags). The
+names are the ones Interakt used, so contacts imported from Interakt
+land in the same audiences:
 
 | Tag | Added when | Removed when |
 |---|---|---|
-| **Order placed COD** / **Order placed Prepaid** | an order is paid that way | never — everyone who ever ordered that way |
-| **Shipped** | a shipment is created, picked up or in transit | the next status |
-| **Out for delivery** | the courier marks it out for delivery | the next status |
-| **Delivery attempted** | a delivery attempt failed (NDR) | the next status |
-| **Delivered** | the courier marks it delivered | the customer's next order |
-| **RTO** | the courier reports `failure` (returning to origin) | the customer's next order |
-| **Cancelled** | the order is cancelled | the customer's next order |
-| **Abandoned cart** | a Shopify or FlexyPe checkout is abandoned | the customer places an order |
+| **Order Placed(CoD)** | a cash-on-delivery order is placed | never |
+| **Order Placed(Prepaid)** | a prepaid order is placed | never |
+| **Abandoned Cart** | a Shopify or FlexyPe checkout is abandoned | the customer places an order |
 
-The shipment-status tags are exclusive: a customer carries only the
-status of their latest order, and a new order clears it. A customer who
-isn't a contact yet is added as one. Tags are created the first time
-they're needed and are ordinary tags — change their colour, use them in
-filters, or start a "tag added" automation from them. Shopify reports
-no RTO status of its own; `failure` is what couriers send for a parcel
-going back.
+A customer who ordered both ways has both order tags. Shipment progress
+(shipped, delivered, RTO…) is not tagged: with several orders in flight
+a single tag can't say which order it is about.
+
+A customer who isn't a contact yet is added as one. Tags are created the
+first time they're needed, matched case-insensitively, and are ordinary
+tags — change their colour, use them in filters, or start a "tag added"
+automation from them.
 
 Testing mode applies here too: while it is on, only test numbers are
 tagged.
