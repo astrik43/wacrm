@@ -52,6 +52,8 @@ function supabaseAdmin() {
 
 interface WhatsAppMessage {
   id: string
+  /** Set when `type` is 'unsupported': what the customer actually sent. */
+  unsupported?: { type?: string }
   /**
    * Sender's phone number. **Optional since Meta's username rollout** —
    * a sender who has adopted a WhatsApp username and has no recent
@@ -1245,6 +1247,19 @@ async function parseMessageContent(
         ...empty,
         contentText: label || payload,
         interactiveReplyId: payload || label,
+      }
+    }
+
+    case 'unsupported': {
+      // Meta delivers what the Cloud API can't carry (polls, view-once
+      // media, edits, some newer types) as `unsupported`, with the
+      // original kind in `unsupported.type` on newer API versions.
+      const kind = message.unsupported?.type
+      return {
+        ...empty,
+        contentText:
+          `[Message type not supported by WhatsApp Business${kind ? ` (${kind})` : ''}` +
+          ' — e.g. a poll, view-once photo or edited message. Ask the customer to send it again as text or a photo.]',
       }
     }
 
