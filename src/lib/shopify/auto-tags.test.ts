@@ -27,11 +27,10 @@ import {
 } from './auto-tags';
 
 const TAG_IDS = new Map([
-  ['order placed', 't-placed'],
   ['shipped', 't-shipped'],
   ['delivered', 't-delivered'],
   ['rto', 't-rto'],
-  ['cod buyer', 't-cod'],
+  ['order placed cod', 't-cod'],
   ['abandoned cart', 't-cart'],
 ]);
 
@@ -68,16 +67,21 @@ beforeEach(() => {
 });
 
 describe('tag rules', () => {
-  it('keeps exactly one order-status tag', () => {
+  it('keeps exactly one shipment-status tag', () => {
     const change = statusTagChange('delivered');
     expect(change.add).toEqual(['Delivered']);
-    expect(change.remove).toHaveLength(6);
+    expect(change.remove).toHaveLength(5);
     expect(change.remove).not.toContain('Delivered');
   });
 
-  it('marks a placed order with its payment and clears the abandoned cart', () => {
-    expect(orderPlacedTags('prepaid').add).toEqual(['Order placed', 'Prepaid buyer']);
-    expect(orderPlacedTags('cod').remove).toContain('Abandoned cart');
+  it('marks a placed order with its lasting payment tag and clears old status and cart', () => {
+    expect(orderPlacedTags('prepaid').add).toEqual(['Order placed Prepaid']);
+    expect(orderPlacedTags('cod').add).toEqual(['Order placed COD']);
+    const remove = orderPlacedTags('cod').remove;
+    expect(remove).toEqual(expect.arrayContaining(['Delivered', 'RTO', 'Cancelled', 'Abandoned cart']));
+    // The payment tags are never removed.
+    expect(remove).not.toContain('Order placed COD');
+    expect(remove).not.toContain('Order placed Prepaid');
   });
 
   it("maps Shopify's shipment statuses", () => {
