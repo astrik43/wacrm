@@ -14,6 +14,13 @@ import {
 import { findExistingContact, isUniqueViolation } from '@/lib/contacts/dedupe'
 import { reopenClosedConversation } from '@/lib/conversations/reopen'
 import { recordMessageStatus } from '@/lib/billing/charges'
+import type { ContentType } from '@/types'
+import {
+  buildNotificationContent,
+  conversationHref,
+  pickContactDisplayName,
+} from '@/lib/notifications/browser-notify'
+import { sendPushToAccount } from '@/lib/push/web-push'
 import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
 import { runAutomationsForTrigger } from '@/lib/automations/engine'
 import { dispatchInboundToFlows } from '@/lib/flows/engine'
@@ -789,12 +796,12 @@ async function processMessage(
   //   text, image, document, audio, video, location, template, interactive
   // Map incoming WhatsApp types that aren't in that list to the closest
   // allowed value so the INSERT doesn't fail with a constraint error.
-  const ALLOWED_CONTENT_TYPES = new Set([
+  const ALLOWED_CONTENT_TYPES = new Set<string>([
     'text', 'image', 'document', 'audio', 'video',
     'location', 'template', 'interactive',
   ])
-  const contentType = ALLOWED_CONTENT_TYPES.has(message.type)
-    ? message.type
+  const contentType: ContentType = ALLOWED_CONTENT_TYPES.has(message.type)
+    ? (message.type as ContentType)
     : message.type === 'sticker'
       ? 'image'         // stickers are images
       : message.type === 'button'
@@ -893,6 +900,25 @@ async function processMessage(
   // so the broadcast's `replied_count` advances (via the aggregate
   // trigger installed in migration 003).
   await flagBroadcastReplyIfAny(accountId, contactRecord.id)
+
+  // Phone / installed-app notification for every device in the account
+  // that turned them on. One notification per chat: a newer message
+  // replaces the older one instead of stacking.
+  const notification = buildNotificationContent(
+    {
+      id: insertedRows[0].id,
+      conversation_id: conversation.id,
+      sender_type: 'customer',
+      content_type: contentType,
+      content_text: contentText,
+    },
+    pickContactDisplayName(contactRecord)
+  )
+  await sendPushToAccount(supabaseAdmin(), accountId, {
+    ...notification,
+    url: conversationHref(conversation.id),
+    tag: `conv-${conversation.id}`,
+  })
 
   // ============================================================
   // Flow runner dispatch.
