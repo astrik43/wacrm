@@ -53,7 +53,7 @@ in-tab "Browser notifications" alert, so nothing arrives twice.
 - **"Push notifications aren't set up on the server"** — the VAPID
   variables are missing; see Server setup.
 - **Blocked** — allow notifications for the site in the phone's settings
-  (iPhone: Settings → Notifications → wacrm; Android: long-press the
+  (iPhone: Settings → Notifications → Chatstrik; Android: long-press the
   app icon → App info → Notifications), then switch it on again.
 - **iPhone shows the install steps instead of a switch** — the page is
   open in Safari, not the installed app. Open it from the Home Screen.
