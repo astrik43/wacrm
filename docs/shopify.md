@@ -143,11 +143,18 @@ feedback request at `15 days`.
 > minute**, sending the shared secret in the `x-cron-secret` header
 > (`AUTOMATION_CRON_SECRET`, the same one the automations and flows
 > crons use). On Dokploy, add a **Schedule** to the application with the
-> cron expression `* * * * *` and a command such as:
+> cron expression `* * * * *`, shell **Sh** (the image is Alpine, no
+> Bash) and this command, which also runs the automations and flows
+> crons:
 >
 > ```sh
-> wget -qO- --header="x-cron-secret: $AUTOMATION_CRON_SECRET" http://localhost:3000/api/shopify/cron
+> for p in shopify automations flows; do wget -qO- --header="x-cron-secret: $AUTOMATION_CRON_SECRET" "http://127.0.0.1:3000/api/$p/cron"; echo; done
 > ```
+>
+> Use `127.0.0.1`, not `localhost`: inside the container `localhost`
+> resolves to IPv6 `::1` first while the server listens on IPv4 only,
+> so wget gets "Connection refused" — and Dokploy still reports the
+> run as successful. Check a run's log for the JSON replies.
 >
 > Without it, delayed messages stay **Scheduled** forever; Settings →
 > Shopify warns when scheduled messages are more than 10 minutes late.
