@@ -49,6 +49,13 @@ import {
   type ShopifyFields,
 } from './order-fields';
 import { notifyShopifyEvent, type NotifyOutcome } from './notify';
+import {
+  ABANDONED_CART_TAG,
+  applyAutoTags,
+  orderPlacedTags,
+  shipmentStatusTag,
+  statusTagChange,
+} from './auto-tags';
 import { makeLinkCode } from './link-codes';
 import { pickOrderPhone } from './phone';
 import { orderRefOf } from './webhook-log';
@@ -288,6 +295,16 @@ async function handleOrder(
       });
     }
   }
+  await applyAutoTags(
+    db,
+    accountId,
+    phone,
+    row.customer_name,
+    event === 'order_cancelled' || cancelledAt
+      ? statusTagChange('cancelled')
+      : orderPlacedTags(paymentMode)
+  );
+
   // An order that is already cancelled when its create arrives gets
   // the cancellation message only.
   if (event === 'order_created' && cancelledAt) {
@@ -390,6 +407,10 @@ async function handleCheckout(
   // claimed, so that later delivery can still schedule the reminders.
   if (!phone) return { orderRef, note: 'no_phone', outcomes: [] };
 
+  await applyAutoTags(db, accountId, phone, fullName || null, {
+    add: [ABANDONED_CART_TAG],
+    remove: [],
+  });
   return scheduleCartReminders(db, accountId, {
     checkoutId,
     orderRef,
@@ -484,6 +505,10 @@ export async function processFlexypeCheckout(
   }
   if (!cart.phone) return { orderRef, note: 'no_phone', outcomes: [] };
 
+  await applyAutoTags(db, accountId, cart.phone, cart.customerName, {
+    add: [ABANDONED_CART_TAG],
+    remove: [],
+  });
   return scheduleCartReminders(db, accountId, {
     checkoutId: cart.checkoutId,
     orderRef,
@@ -550,7 +575,13 @@ async function handleFulfillment(
         shipmentStatus: result.prev_shipment_status,
       };
   const events = deriveFulfillmentEvents(prev, next);
-  if (events.length === 0) {
+  // A status change re-tags the customer even when it sends nothing
+  // (attempted delivery, RTO).
+  const statusTag =
+    prev === null || prev.shipmentStatus !== next.shipmentStatus
+      ? shipmentStatusTag(next.shipmentStatus)
+      : null;
+  if (events.length === 0 && !statusTag) {
     return { orderRef: fallbackRef, note: 'no_change', outcomes: [] };
   }
 
@@ -601,6 +632,19 @@ async function handleFulfillment(
   const paymentMode: PaymentMode | null = isPaymentMode(order?.payment_mode)
     ? order.payment_mode
     : null;
+
+  if (statusTag) {
+    await applyAutoTags(
+      db,
+      accountId,
+      phone,
+      customerName,
+      statusTagChange(statusTag)
+    );
+  }
+  if (events.length === 0) {
+    return { orderRef: orderName ?? fallbackRef, note: 'no_change', outcomes: [] };
+  }
 
   const outcomes: ProcessOutcome[] = [];
   for (const event of events) {
