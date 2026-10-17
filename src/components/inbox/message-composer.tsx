@@ -629,7 +629,12 @@ export function MessageComposer({
           </Button>
         </div>
       ) : (
-        <div className="flex items-end gap-2">
+        // Phones: the text box takes its own full-width first line and
+        // the buttons wrap below it (Send pushed right). One row from
+        // `sm` up. Without the wrap, four buttons + Send left the text
+        // box too narrow for its placeholder and pushed the page wider
+        // than the screen.
+        <div className="flex flex-wrap items-end gap-2 sm:flex-nowrap">
           {/* Attach menu — photo / video / document / voice. */}
           <DropdownMenu>
             <DropdownMenuTrigger
@@ -745,7 +750,7 @@ export function MessageComposer({
             // The placeholder text also surfaces the read-only state.
             title={readOnly ? t("readOnlyTitle") : undefined}
             className={cn(
-              "flex-1 resize-none rounded-xl border border-border bg-muted px-4 py-2.5 text-sm text-foreground placeholder-muted-foreground outline-none transition-colors focus:border-primary/50",
+              "order-first min-w-0 flex-1 basis-full resize-none rounded-xl border border-border bg-muted px-4 py-2.5 text-sm text-foreground placeholder-muted-foreground outline-none transition-colors focus:border-primary/50 sm:order-none sm:basis-0",
               (sessionExpired || readOnly) && "cursor-not-allowed opacity-50"
             )}
           />
@@ -756,7 +761,7 @@ export function MessageComposer({
             gateReason="send messages"
             disabled={!text.trim() || sessionExpired || sending}
             onClick={handleSend}
-            className="h-9 w-9 shrink-0 bg-primary p-0 hover:bg-primary/90 disabled:opacity-40"
+            className="ml-auto h-9 w-9 shrink-0 bg-primary p-0 hover:bg-primary/90 disabled:opacity-40 sm:ml-0"
           >
             <Send className="h-4 w-4" />
           </GatedButton>
@@ -767,7 +772,7 @@ export function MessageComposer({
           `items-end` buttons below the textarea. Indented to line up
           under the textarea left edge. */}
       {!draft && !recording && (
-        <p className="mt-1 pl-[5.5rem] text-[10px] text-muted-foreground">
+        <p className="mt-1 text-[10px] text-muted-foreground sm:pl-[5.5rem]">
           {t("draftHint")}
         </p>
       )}
