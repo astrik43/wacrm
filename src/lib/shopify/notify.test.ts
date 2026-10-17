@@ -75,6 +75,9 @@ interface FakeState {
   orderUpdates: Record<string, unknown>[];
   /** shopify_configs test-mode row; 'error' simulates a failed read. */
   testConfig?: { test_mode: boolean; test_phones: string[] } | 'error' | null;
+  /** Messages already in the conversation (default 1: not empty). */
+  messageCount?: number;
+  conversationDeletes?: number;
 }
 
 function fakeDb(state: FakeState): SupabaseClient {
@@ -101,13 +104,22 @@ function fakeDb(state: FakeState): SupabaseClient {
           if (table === 'shopify_orders') state.orderUpdates.push(patch);
           return builder;
         },
-        then: (resolve: (r: { data: unknown; error: null }) => unknown) =>
+        delete: () => {
+          if (table === 'conversations') {
+            state.conversationDeletes = (state.conversationDeletes ?? 0) + 1;
+          }
+          return builder;
+        },
+        then: (
+          resolve: (r: { data: unknown; error: null; count?: number }) => unknown
+        ) =>
           resolve({
             data:
               table === 'shopify_event_templates'
                 ? ([] as unknown[]).concat(state.eventRow ?? [])
                 : null,
             error: null,
+            ...(table === 'messages' ? { count: state.messageCount ?? 1 } : {}),
           }),
       };
       return builder;
@@ -294,6 +306,22 @@ describe('notifyShopifyEvent', () => {
         payload: null,
       },
     ]);
+    // The conversation already had messages: left alone.
+    expect(state.conversationDeletes ?? 0).toBe(0);
+  });
+
+  it('removes the empty conversation a failed send left behind', async () => {
+    mocks.sendMessageToConversation.mockRejectedValue(
+      new SendMessageError(
+        'meta_error',
+        'WhatsApp provided number needs display name approval',
+        502
+      )
+    );
+    const state = freshState({ messageCount: 0 });
+    const outcome = await notifyShopifyEvent(fakeDb(state), 'acct-1', INPUT);
+    expect(outcome.status).toBe('failed');
+    expect(state.conversationDeletes).toBe(1);
   });
 });
 
