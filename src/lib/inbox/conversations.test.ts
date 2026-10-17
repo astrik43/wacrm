@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   matchesContactFilters,
   normalizeConversation,
+  sortByLatestMessage,
 } from "./conversations";
 import type { Conversation } from "@/types";
 
@@ -141,5 +142,39 @@ describe("normalizeConversation", () => {
     };
     // A contactless row passes through untouched (consumers use `?.`).
     expect(normalizeConversation(raw).contact).toBeNull();
+  });
+});
+
+describe("sortByLatestMessage", () => {
+  const conv = (id: string, last: string | null, created = "2026-10-01T00:00:00Z") => ({
+    ...makeConversation(null),
+    id,
+    last_message_at: last ?? undefined,
+    created_at: created,
+  });
+
+  it("puts the conversation with the newest message first", () => {
+    const list = [
+      conv("old", "2026-10-17T10:00:00Z"),
+      // Got a message just now, but sat lower in the loaded list.
+      conv("new", "2026-10-17T17:40:51Z"),
+      conv("mid", "2026-10-17T12:00:00Z"),
+    ];
+    expect(sortByLatestMessage(list).map((c) => c.id)).toEqual(["new", "mid", "old"]);
+    // The input is left alone.
+    expect(list.map((c) => c.id)).toEqual(["old", "new", "mid"]);
+  });
+
+  it("falls back to creation time for conversations without messages", () => {
+    const list = [
+      conv("empty-old", null, "2026-10-01T00:00:00Z"),
+      conv("msg", "2026-10-10T00:00:00Z"),
+      conv("empty-new", null, "2026-10-15T00:00:00Z"),
+    ];
+    expect(sortByLatestMessage(list).map((c) => c.id)).toEqual([
+      "empty-new",
+      "msg",
+      "empty-old",
+    ]);
   });
 });

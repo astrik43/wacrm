@@ -6,6 +6,7 @@ import {
   CONVERSATION_SELECT,
   matchesContactFilters,
   normalizeConversations,
+  sortByLatestMessage,
 } from "@/lib/inbox/conversations";
 import { cn } from "@/lib/utils";
 import type { Conversation, ConversationStatus, Tag } from "@/types";
@@ -187,7 +188,7 @@ export function ConversationList({
       });
     }
 
-    return result;
+    return sortByLatestMessage(result);
   }, [conversations, filter, search, selectedTagIds, selectedCompany]);
 
   const toggleTag = useCallback((id: string) => {
