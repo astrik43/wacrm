@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import { formatWhatsAppText } from "@/lib/inbox/whatsapp-format";
 import type { Message, MessageReaction } from "@/types";
 import {
   Clock,
@@ -100,7 +101,7 @@ function MessageContent({
     case "text":
       return (
         <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm">
-          {message.content_text}
+          {formatWhatsAppText(message.content_text)}
         </p>
       );
 
@@ -114,7 +115,7 @@ function MessageContent({
           )}
           {message.content_text && (
             <p className="mt-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm">
-              {message.content_text}
+              {formatWhatsAppText(message.content_text)}
             </p>
           )}
         </div>
@@ -130,7 +131,7 @@ function MessageContent({
           )}
           {message.content_text && (
             <p className="mt-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm">
-              {message.content_text}
+              {formatWhatsAppText(message.content_text)}
             </p>
           )}
         </div>
@@ -176,7 +177,7 @@ function MessageContent({
           </span>
           {message.content_text ? (
             <p className="mt-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm">
-              {message.content_text}
+              {formatWhatsAppText(message.content_text)}
             </p>
           ) : (
             message.template_name && (
@@ -217,14 +218,14 @@ function MessageContent({
               {t("buttonReply")}
             </span>
             <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm">
-              {message.content_text || t("interactiveReply")}
+              {formatWhatsAppText(message.content_text) || t("interactiveReply")}
             </p>
           </div>
         );
       }
       return (
         <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm">
-          {message.content_text || t("interactiveReply")}
+          {formatWhatsAppText(message.content_text) || t("interactiveReply")}
         </p>
       );
     }
