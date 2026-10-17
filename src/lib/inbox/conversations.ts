@@ -69,3 +69,21 @@ export function matchesContactFilters(
 
   return true;
 }
+
+function activityTime(conversation: Conversation): number {
+  const at = conversation.last_message_at ?? conversation.created_at;
+  const ms = at ? Date.parse(at) : NaN;
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+/**
+ * Newest activity first. The initial fetch is ordered by the database,
+ * but realtime events patch `last_message_at` in place — sorting on
+ * every render keeps a conversation that just got a message at the top
+ * instead of where it happened to sit when the page loaded.
+ */
+export function sortByLatestMessage(
+  conversations: readonly Conversation[],
+): Conversation[] {
+  return [...conversations].sort((a, b) => activityTime(b) - activityTime(a));
+}
