@@ -1,24 +1,23 @@
 // ============================================================
 // Automatic contact tags from Shopify / FlexyPe behaviour, so
-// broadcasts can target "delivered customers", "RTO", "COD orders"…
+// broadcasts can target COD customers, prepaid customers and abandoned
+// carts. The names match the ones Interakt used, so contacts imported
+// from Interakt and new customers share the same tags.
 //
-// Two kinds of tag:
+//   Order Placed(CoD) / Order Placed(Prepaid)
+//     added on every order by how it is paid, never removed — a
+//     customer who ordered both ways has both.
+//   Abandoned Cart
+//     added when a cart is abandoned, removed when the customer places
+//     an order.
 //
-//   Lasting
-//     Order placed COD / Order placed Prepaid — added on every order by
-//     how it is paid, never removed, so a broadcast can reach everyone
-//     who ever ordered that way.
-//     Abandoned cart — added when a cart is abandoned, removed when
-//     the customer places an order.
+// Shipment progress is deliberately not tagged: with several orders in
+// flight a single status tag can't say which order it is about.
 //
-//   Shipment status (one at a time — the latest order's state)
-//     Shipped → Out for delivery → Delivery attempted → Delivered, or
-//     RTO / Cancelled. Setting one removes the others; a new order
-//     clears the previous order's status.
-//
-// Tags are ordinary account tags (created on first use), added through
-// the same path as a manual tag, so "tag added" automations fire too.
-// Tagging never blocks or fails the webhook that triggered it.
+// Tags are ordinary account tags (created on first use, matched
+// case-insensitively), added through the same path as a manual tag, so
+// "tag added" automations fire too. Tagging never blocks or fails the
+// webhook that triggered it.
 // ============================================================
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -32,79 +31,29 @@ import { resolveImportTagIds } from '@/lib/contacts/resolve-import-tags';
 
 import type { PaymentMode } from './events';
 
-export const ORDER_STATUS_TAGS = {
-  shipped: 'Shipped',
-  out_for_delivery: 'Out for delivery',
-  attempted: 'Delivery attempted',
-  delivered: 'Delivered',
-  rto: 'RTO',
-  cancelled: 'Cancelled',
-} as const;
-
-export type OrderStatusTag = keyof typeof ORDER_STATUS_TAGS;
-
-export const BUYER_TAGS: Record<PaymentMode, string> = {
-  cod: 'Order placed COD',
-  prepaid: 'Order placed Prepaid',
+export const ORDER_PLACED_TAGS: Record<PaymentMode, string> = {
+  cod: 'Order Placed(CoD)',
+  prepaid: 'Order Placed(Prepaid)',
 };
 
-export const ABANDONED_CART_TAG = 'Abandoned cart';
+export const ABANDONED_CART_TAG = 'Abandoned Cart';
 
 export interface TagChange {
   add: string[];
   remove: string[];
 }
 
-/** Make `status` the contact's only order-status tag. */
-export function statusTagChange(status: OrderStatusTag): TagChange {
-  const add = ORDER_STATUS_TAGS[status];
-  return {
-    add: [add],
-    remove: Object.values(ORDER_STATUS_TAGS).filter((name) => name !== add),
-  };
-}
-
-/**
- * Tags for a newly placed order: its lasting payment tag; the previous
- * order's shipment status and any abandoned cart no longer apply.
- */
+/** Tags for a newly placed order: its payment tag; the cart is bought. */
 export function orderPlacedTags(paymentMode: PaymentMode): TagChange {
   return {
-    add: [BUYER_TAGS[paymentMode]],
-    remove: [...Object.values(ORDER_STATUS_TAGS), ABANDONED_CART_TAG],
+    add: [ORDER_PLACED_TAGS[paymentMode]],
+    remove: [ABANDONED_CART_TAG],
   };
 }
 
-/**
- * The order-status tag a shipment's Shopify status means, or null for
- * a status that says nothing new. A shipment without a status yet (just
- * created with tracking) counts as shipped.
- */
-export function shipmentStatusTag(
-  shipmentStatus: string | null
-): OrderStatusTag | null {
-  switch (shipmentStatus) {
-    case null:
-    case 'label_printed':
-    case 'label_purchased':
-    case 'confirmed':
-    case 'carrier_picked_up':
-    case 'in_transit':
-    case 'ready_for_pickup':
-      return 'shipped';
-    case 'out_for_delivery':
-      return 'out_for_delivery';
-    case 'attempted_delivery':
-      return 'attempted';
-    case 'delivered':
-      return 'delivered';
-    // Shopify has no RTO status; couriers report a failed delivery
-    // headed back to the store as `failure`.
-    case 'failure':
-      return 'rto';
-    default:
-      return null;
-  }
+/** Tags for an abandoned checkout. */
+export function abandonedCartTags(): TagChange {
+  return { add: [ABANDONED_CART_TAG], remove: [] };
 }
 
 /**

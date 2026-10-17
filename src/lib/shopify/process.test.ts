@@ -945,23 +945,11 @@ describe('CRM redirect link codes', () => {
 });
 
 describe('automatic contact tags', () => {
-  const SHIPMENT = {
-    id: 255858046,
-    order_id: 820982911946154500,
-    name: '#1042.1',
-    status: 'success',
-    tracking_number: 'EX123',
-    tracking_url: 'https://t.example/EX123',
-    tracking_company: 'BlueDart',
-    shipment_status: null,
-    updated_at: '2026-10-12T12:00:00+05:30',
-  };
   const tagCall = (i = 0) => mocks.applyTags.mock.calls[i];
 
-  it('tags a new order with how it was paid, and clears the old status and abandoned cart', async () => {
-    const state = freshState();
+  it("tags a new order with how it was paid and clears the abandoned cart", async () => {
     await processShopifyWebhook(
-      fakeDb(state),
+      fakeDb(freshState()),
       CONFIG,
       'orders/create',
       { ...ORDER, payment_gateway_names: ['Cash on Delivery (COD)'] },
@@ -969,14 +957,13 @@ describe('automatic contact tags', () => {
     );
     expect(tagCall()[1]).toBe('acct-1');
     expect(tagCall()[2]).toBe('919876543210');
-    expect(tagCall()[4].add).toEqual(['Order placed COD']);
-    expect(tagCall()[4].remove).toEqual(
-      expect.arrayContaining(['Delivered', 'RTO', 'Cancelled', 'Abandoned cart'])
-    );
-    expect(tagCall()[4].remove).not.toContain('Order placed COD');
+    expect(tagCall()[4]).toEqual({
+      add: ['Order Placed(CoD)'],
+      remove: ['Abandoned Cart'],
+    });
   });
 
-  it('tags a cancellation', async () => {
+  it('does not tag cancellations or shipment progress', async () => {
     await processShopifyWebhook(
       fakeDb(freshState()),
       CONFIG,
@@ -984,50 +971,18 @@ describe('automatic contact tags', () => {
       { ...ORDER, cancelled_at: '2026-10-12T11:00:00+05:30' },
       null
     );
-    expect(tagCall()[4].add).toEqual(['Cancelled']);
-  });
-
-  it('tags shipment progress, including RTO that sends no message', async () => {
-    const state = freshState({
-      storedOrder: STORED_ORDER,
-      rpcResult: {
-        ...NEW,
-        was_new: false,
-        prev_tracking_number: 'EX123',
-        prev_tracking_url: 'https://t.example/EX123',
-        prev_shipment_status: 'in_transit',
-      },
-    });
-    const result = await processShopifyWebhook(
-      fakeDb(state),
-      CONFIG,
-      'fulfillments/update',
-      { ...SHIPMENT, shipment_status: 'failure' },
-      null
-    );
-    expect(mocks.notify).not.toHaveBeenCalled();
-    expect(result.note).toBe('no_change');
-    expect(tagCall()[2]).toBe('919876543210');
-    expect(tagCall()[4].add).toEqual(['RTO']);
-    expect(tagCall()[4].remove).toContain('Shipped');
-  });
-
-  it('leaves tags alone when the shipment status did not change', async () => {
-    const state = freshState({
-      storedOrder: STORED_ORDER,
-      rpcResult: {
-        ...NEW,
-        was_new: false,
-        prev_tracking_number: 'EX123',
-        prev_tracking_url: 'https://t.example/EX123',
-        prev_shipment_status: 'in_transit',
-      },
-    });
     await processShopifyWebhook(
-      fakeDb(state),
+      fakeDb(freshState({ storedOrder: STORED_ORDER, rpcResult: NEW })),
       CONFIG,
-      'fulfillments/update',
-      { ...SHIPMENT, shipment_status: 'in_transit' },
+      'fulfillments/create',
+      {
+        id: 255858046,
+        order_id: 820982911946154500,
+        tracking_number: 'EX123',
+        tracking_url: 'https://t.example/EX123',
+        shipment_status: 'delivered',
+        updated_at: '2026-10-12T12:00:00+05:30',
+      },
       null
     );
     expect(mocks.applyTags).not.toHaveBeenCalled();
@@ -1048,6 +1003,6 @@ describe('automatic contact tags', () => {
       null
     );
     expect(tagCall()[2]).toBe('919029130001');
-    expect(tagCall()[4]).toEqual({ add: ['Abandoned cart'], remove: [] });
+    expect(tagCall()[4]).toEqual({ add: ['Abandoned Cart'], remove: [] });
   });
 });

@@ -19,18 +19,11 @@ vi.mock('@/lib/contacts/tag-events', () => ({
   addContactTagAndDispatch: mocks.addTag,
 }));
 
-import {
-  applyAutoTags,
-  orderPlacedTags,
-  shipmentStatusTag,
-  statusTagChange,
-} from './auto-tags';
+import { abandonedCartTags, applyAutoTags, orderPlacedTags } from './auto-tags';
 
 const TAG_IDS = new Map([
-  ['shipped', 't-shipped'],
-  ['delivered', 't-delivered'],
-  ['rto', 't-rto'],
-  ['order placed cod', 't-cod'],
+  ['order placed(cod)', 't-cod'],
+  ['order placed(prepaid)', 't-prepaid'],
   ['abandoned cart', 't-cart'],
 ]);
 
@@ -67,38 +60,20 @@ beforeEach(() => {
 });
 
 describe('tag rules', () => {
-  it('keeps exactly one shipment-status tag', () => {
-    const change = statusTagChange('delivered');
-    expect(change.add).toEqual(['Delivered']);
-    expect(change.remove).toHaveLength(5);
-    expect(change.remove).not.toContain('Delivered');
-  });
-
-  it('marks a placed order with its lasting payment tag and clears old status and cart', () => {
-    expect(orderPlacedTags('prepaid').add).toEqual(['Order placed Prepaid']);
-    expect(orderPlacedTags('cod').add).toEqual(['Order placed COD']);
-    const remove = orderPlacedTags('cod').remove;
-    expect(remove).toEqual(expect.arrayContaining(['Delivered', 'RTO', 'Cancelled', 'Abandoned cart']));
-    // The payment tags are never removed.
-    expect(remove).not.toContain('Order placed COD');
-    expect(remove).not.toContain('Order placed Prepaid');
-  });
-
-  it("maps Shopify's shipment statuses", () => {
-    expect(shipmentStatusTag(null)).toBe('shipped');
-    expect(shipmentStatusTag('in_transit')).toBe('shipped');
-    expect(shipmentStatusTag('out_for_delivery')).toBe('out_for_delivery');
-    expect(shipmentStatusTag('attempted_delivery')).toBe('attempted');
-    expect(shipmentStatusTag('delivered')).toBe('delivered');
-    expect(shipmentStatusTag('failure')).toBe('rto');
-    expect(shipmentStatusTag('something_new')).toBeNull();
+  it("tags an order with Interakt's payment tag and clears the abandoned cart", () => {
+    expect(orderPlacedTags('cod')).toEqual({
+      add: ['Order Placed(CoD)'],
+      remove: ['Abandoned Cart'],
+    });
+    expect(orderPlacedTags('prepaid').add).toEqual(['Order Placed(Prepaid)']);
+    expect(abandonedCartTags()).toEqual({ add: ['Abandoned Cart'], remove: [] });
   });
 });
 
 describe('applyAutoTags', () => {
-  it('finds or creates the contact, removes stale status tags and adds the new one', async () => {
-    const { db, deletes } = fakeDb(['t-shipped', 't-cod']);
-    await applyAutoTags(db, 'acct-1', '919029130001', 'Arun', statusTagChange('delivered'));
+  it('finds or creates the contact, adds the order tag and removes the abandoned cart', async () => {
+    const { db, deletes } = fakeDb(['t-cart']);
+    await applyAutoTags(db, 'acct-1', '919029130001', 'Arun', orderPlacedTags('prepaid'));
 
     expect(mocks.findOrCreate).toHaveBeenCalledWith(db, 'acct-1', 'user-1', {
       phone: '+919029130001',
@@ -107,41 +82,38 @@ describe('applyAutoTags', () => {
     // Only tags it may create are created; removals never create tags.
     expect(mocks.resolveTags).toHaveBeenCalledWith(
       db,
-      expect.objectContaining({ tagNames: ['Delivered'], canCreateTags: true })
+      expect.objectContaining({ tagNames: ['Order Placed(Prepaid)'], canCreateTags: true })
     );
     expect(mocks.resolveTags).toHaveBeenCalledWith(
       db,
       expect.objectContaining({ canCreateTags: false })
     );
-    expect(deletes).toEqual([['t-shipped']]);
+    expect(deletes).toEqual([['t-cart']]);
     expect(mocks.addTag).toHaveBeenCalledWith({
       db,
       accountId: 'acct-1',
       contactId: 'ct-1',
-      tagId: 't-delivered',
+      tagId: 't-prepaid',
     });
   });
 
   it('does not re-add a tag the contact already has', async () => {
     const { db, deletes } = fakeDb(['t-cart']);
-    await applyAutoTags(db, 'acct-1', '919029130001', null, {
-      add: ['Abandoned cart'],
-      remove: [],
-    });
+    await applyAutoTags(db, 'acct-1', '919029130001', null, abandonedCartTags());
     expect(mocks.addTag).not.toHaveBeenCalled();
     expect(deletes).toEqual([]);
   });
 
   it('does nothing without a phone and never throws', async () => {
     const { db } = fakeDb([]);
-    await applyAutoTags(db, 'acct-1', null, null, statusTagChange('rto'));
+    await applyAutoTags(db, 'acct-1', null, null, orderPlacedTags('cod'));
     expect(mocks.findOrCreate).not.toHaveBeenCalled();
 
     mocks.findOrCreate.mockRejectedValue(new Error('db down'));
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
       await expect(
-        applyAutoTags(db, 'acct-1', '919029130001', null, statusTagChange('rto'))
+        applyAutoTags(db, 'acct-1', '919029130001', null, orderPlacedTags('cod'))
       ).resolves.toBeUndefined();
       expect(error).toHaveBeenCalled();
     } finally {
