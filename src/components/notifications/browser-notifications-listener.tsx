@@ -1,6 +1,9 @@
 "use client";
 
+import { useEffect } from "react";
+
 import { useBrowserNotifications } from "@/hooks/use-browser-notifications";
+import { registerServiceWorker } from "@/lib/push/client";
 
 /**
  * Headless. Mount ONCE per signed-in dashboard tab (the dashboard
@@ -9,5 +12,10 @@ import { useBrowserNotifications } from "@/hooks/use-browser-notifications";
  */
 export function BrowserNotificationsListener() {
   useBrowserNotifications();
+  // Keep the push service worker registered and current on every
+  // dashboard load, so the installed app gets notifications.
+  useEffect(() => {
+    void registerServiceWorker();
+  }, []);
   return null;
 }

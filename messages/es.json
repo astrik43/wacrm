@@ -1770,6 +1770,28 @@
       "title": "Acceso y seguridad",
       "description": "Cambia tu contraseña y cierra sesión en tus dispositivos. Esto mantiene tu cuenta segura."
     },
+    "pushNotifications": {
+      "title": "Notificaciones en el teléfono",
+      "description": "Recibe una notificación en este teléfono o computadora por cada mensaje nuevo de un cliente, incluso con la app cerrada. Actívalas por separado en cada dispositivo.",
+      "toggleLabel": "Notificar a este dispositivo sobre mensajes nuevos",
+      "toggleDesc": "Funciona con la app cerrada. Al tocar la notificación se abre el chat.",
+      "sendTest": "Enviar notificación de prueba",
+      "testSent": "Notificación de prueba enviada: debería llegar en unos segundos.",
+      "testNone": "No hay dispositivos que notificar. Activa primero las notificaciones.",
+      "enabledToast": "Notificaciones activadas en este dispositivo.",
+      "installHint": "Consejo: instala la app para la mejor experiencia; en Chrome para Android usa ⋮ → Añadir a pantalla de inicio / Instalar app.",
+      "iosTitle": "En iPhone, primero añade la app a la pantalla de inicio:",
+      "iosStep1": "En Safari, toca el botón Compartir",
+      "iosStep2": "Elige “Añadir a pantalla de inicio” y toca Añadir.",
+      "iosStep3": "Abre la app desde la pantalla de inicio y vuelve aquí para activar las notificaciones.",
+      "unsupported": "Este navegador no admite notificaciones push.",
+      "errors": {
+        "unsupported": "Este navegador no admite notificaciones push.",
+        "denied": "Las notificaciones están bloqueadas. Permítelas para este sitio en la configuración del navegador o del teléfono y vuelve a intentarlo.",
+        "not_configured": "Las notificaciones push aún no están configuradas en el servidor (faltan las claves VAPID).",
+        "failed": "No se pudieron activar las notificaciones. Inténtalo de nuevo."
+      }
+    },
     "browserNotifications": {
       "title": "Notificaciones del navegador",
       "description": "Recibe una alerta de escritorio por cada nuevo mensaje de cliente, incluso cuando estés en otra página. Se guarda en este dispositivo.",

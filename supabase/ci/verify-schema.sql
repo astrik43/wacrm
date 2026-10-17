@@ -197,6 +197,11 @@ BEGIN
       'record_message_status() is missing — migration 050 did not apply';
   END IF;
 
+  -- Web Push devices (051), written by /api/push/subscription.
+  IF to_regclass('public.push_subscriptions') IS NULL THEN
+    RAISE EXCEPTION 'push_subscriptions is missing — migration 051 did not apply';
+  END IF;
+
   RAISE NOTICE 'schema verification passed';
 END
 $$;

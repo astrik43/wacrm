@@ -1788,6 +1788,28 @@
       "title": "Login & security",
       "description": "Change your password and sign out of your devices. These keep your account safe."
     },
+    "pushNotifications": {
+      "title": "Phone notifications",
+      "description": "Get a notification on this phone or computer for every new customer message, even when the app is closed. Turn it on separately on each device.",
+      "toggleLabel": "Notify this device about new messages",
+      "toggleDesc": "Works when the app is closed. Tapping a notification opens the chat.",
+      "sendTest": "Send test notification",
+      "testSent": "Test notification sent — it should arrive in a few seconds.",
+      "testNone": "No device to notify. Turn notifications on first.",
+      "enabledToast": "Notifications are on for this device.",
+      "installHint": "Tip: install the app for the best experience — in Chrome on Android use ⋮ → Add to Home screen / Install app.",
+      "iosTitle": "On iPhone, add the app to your Home Screen first:",
+      "iosStep1": "In Safari, tap the Share button",
+      "iosStep2": "Choose “Add to Home Screen”, then Add.",
+      "iosStep3": "Open the app from your Home Screen and come back here to turn notifications on.",
+      "unsupported": "This browser doesn't support push notifications.",
+      "errors": {
+        "unsupported": "This browser doesn't support push notifications.",
+        "denied": "Notifications are blocked. Allow them for this site in your browser or phone settings, then try again.",
+        "not_configured": "Push notifications aren't set up on the server yet (VAPID keys missing).",
+        "failed": "Couldn't turn on notifications. Please try again."
+      }
+    },
     "browserNotifications": {
       "title": "Browser notifications",
       "description": "Get a desktop alert for every new customer message, even while you're on another page. Saved to this device.",

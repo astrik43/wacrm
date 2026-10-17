@@ -32,6 +32,15 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [{ url: "/icon" }],
+    // Home-screen icon on iPhone / iPad.
+    apple: [{ url: "/pwa-icon/192", sizes: "192x192" }],
+  },
+  // Installed from Safari's "Add to Home Screen": open full-screen like
+  // an app. Web Push on iOS works only for an app installed this way.
+  appleWebApp: {
+    capable: true,
+    title: "wacrm",
+    statusBarStyle: "default",
   },
   formatDetection: {
     email: false,

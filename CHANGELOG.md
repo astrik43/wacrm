@@ -94,6 +94,11 @@ and when the shipment is out for delivery or delivered.
   edited to a chosen number immediately, using the latest order's
   values.
 
+> **Migration required:** apply `supabase/migrations/051_push_subscriptions.sql`
+> (new `push_subscriptions` table) and set `VAPID_PUBLIC_KEY`,
+> `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` to enable phone notifications
+> (see `docs/notifications.md`).
+
 > **Migration required:** apply `supabase/migrations/050_message_charges.sql`
 > (new `message_charges` table and `record_message_status` function;
 > backfills past outbound messages). Apply it **before** deploying.
@@ -101,6 +106,12 @@ and when the shipment is out for delivery or delivered.
 > **Migration required:** apply `supabase/migrations/049_shopify_test_mode.sql`
 > (`test_mode` and `test_phones` on `shopify_configs`, `is_test` on
 > `shopify_notifications`). Apply it **before** deploying this version.
+
+- **Installable app + phone notifications.** wacrm can be installed
+  on Android, iPhone (Add to Home Screen) and desktop, opening into the
+  Inbox. Settings → Profile → *Phone notifications* turns on Web Push
+  for the device: every new customer message notifies, even with the app
+  closed, and tapping opens the chat. See `docs/notifications.md`.
 
 - **Transaction Details.** A new sidebar page (admins) lists every
   WhatsApp message the CRM sent: recipient, template, source (Shopify

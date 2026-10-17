@@ -1770,6 +1770,28 @@
       "title": "Login e segurança",
       "description": "Altere sua senha e saia dos seus dispositivos. Isso mantém sua conta segura."
     },
+    "pushNotifications": {
+      "title": "Notificações no celular",
+      "description": "Receba uma notificação neste celular ou computador a cada nova mensagem de cliente, mesmo com o app fechado. Ative separadamente em cada dispositivo.",
+      "toggleLabel": "Notificar este dispositivo sobre novas mensagens",
+      "toggleDesc": "Funciona com o app fechado. Tocar na notificação abre a conversa.",
+      "sendTest": "Enviar notificação de teste",
+      "testSent": "Notificação de teste enviada — deve chegar em alguns segundos.",
+      "testNone": "Nenhum dispositivo para notificar. Ative as notificações primeiro.",
+      "enabledToast": "Notificações ativadas neste dispositivo.",
+      "installHint": "Dica: instale o app para a melhor experiência — no Chrome do Android use ⋮ → Adicionar à tela inicial / Instalar app.",
+      "iosTitle": "No iPhone, adicione o app à Tela de Início primeiro:",
+      "iosStep1": "No Safari, toque no botão Compartilhar",
+      "iosStep2": "Escolha “Adicionar à Tela de Início” e toque em Adicionar.",
+      "iosStep3": "Abra o app pela Tela de Início e volte aqui para ativar as notificações.",
+      "unsupported": "Este navegador não suporta notificações push.",
+      "errors": {
+        "unsupported": "Este navegador não suporta notificações push.",
+        "denied": "As notificações estão bloqueadas. Permita-as para este site nas configurações do navegador ou do celular e tente de novo.",
+        "not_configured": "As notificações push ainda não estão configuradas no servidor (faltam as chaves VAPID).",
+        "failed": "Não foi possível ativar as notificações. Tente novamente."
+      }
+    },
     "browserNotifications": {
       "title": "Notificações do navegador",
       "description": "Receba um alerta na área de trabalho para cada nova mensagem de cliente, mesmo quando estiver em outra página. Salvo neste dispositivo.",

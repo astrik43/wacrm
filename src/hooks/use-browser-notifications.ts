@@ -17,6 +17,7 @@ import {
   viewedConversationFromLocation,
   type NotificationLabels,
 } from "@/lib/notifications/browser-notify";
+import { readPushDevice } from "@/lib/push/client";
 
 const serverSnapshot = () => false;
 
@@ -128,6 +129,8 @@ export function useBrowserNotifications(): void {
           // Re-check every time: the user can revoke permission in the
           // browser without the preference flipping.
           if (getNotificationPermission() !== "granted") return;
+          // This device gets every message as a push already.
+          if (readPushDevice()) return;
           const msg = payload.new as Message;
           const shouldNotify = shouldNotifyForMessage(msg, {
             documentVisible: document.visibilityState === "visible",
