@@ -196,7 +196,7 @@
       "templates": "Modelos",
       "readOnlyPlaceholder": "Somente leitura — visualizadores podem navegar, mas não responder",
       "sessionExpiredPlaceholder": "Sessão expirada - use um modelo",
-      "typeMessagePlaceholder": "Digite uma mensagem... (Shift+Enter para nova linha)",
+      "typeMessagePlaceholder": "Digite uma mensagem",
       "readOnlyTitle": "Somente leitura — sua função não pode enviar mensagens",
       "recording": "Gravando… {current} / {max}",
       "cancel": "Cancelar",
