@@ -22,8 +22,8 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: "wacrm",
-    template: "%s — wacrm",
+    default: "Chatstrik",
+    template: "%s — Chatstrik",
   },
   description: "Self-hostable CRM template for WhatsApp.",
   robots: {
@@ -39,7 +39,7 @@ export const metadata: Metadata = {
   // an app. Web Push on iOS works only for an app installed this way.
   appleWebApp: {
     capable: true,
-    title: "wacrm",
+    title: "Chatstrik",
     statusBarStyle: "default",
   },
   formatDetection: {
