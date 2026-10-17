@@ -13,7 +13,11 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
-import { SECTION_META, type SettingsSection } from './settings-sections';
+import {
+  SECTION_META,
+  canSeeSection,
+  type SettingsSection,
+} from './settings-sections';
 import { SettingsChip, StatusDot } from './settings-chip';
 import { ROLE_META } from './role-meta';
 
@@ -36,8 +40,15 @@ export function SettingsOverview({
 }: {
   onSelect: (section: SettingsSection) => void;
 }) {
-  const { user, profile, accountId, accountRole, defaultCurrency, canManageMembers } =
-    useAuth();
+  const {
+    user,
+    profile,
+    accountId,
+    accountRole,
+    defaultCurrency,
+    canManageMembers,
+    canEditSettings,
+  } = useAuth();
   const { mode, theme } = useTheme();
   const t = useTranslations('Settings.overview');
   const tRoles = useTranslations('Settings.roles');
@@ -117,8 +128,9 @@ export function SettingsOverview({
       setCountsLoading(false);
     })();
 
-    // WhatsApp connection status — slower, independent.
-    (async () => {
+    // WhatsApp connection status — slower, independent. Admins only:
+    // the tile isn't shown to anyone else.
+    if (canEditSettings) (async () => {
       setWhatsappLoading(true);
       const [row, health] = await Promise.allSettled([
         supabase
@@ -139,7 +151,7 @@ export function SettingsOverview({
     return () => {
       cancelled = true;
     };
-  }, [user?.id, accountId, canManageMembers]);
+  }, [user?.id, accountId, canManageMembers, canEditSettings]);
 
   const displayName = profile?.full_name || profile?.email || t('yourAccount');
   const initial = (profile?.full_name || profile?.email || 'U').charAt(0).toUpperCase();
@@ -219,6 +231,10 @@ export function SettingsOverview({
     },
   ];
 
+  const visibleTiles = tiles.filter(({ section }) =>
+    canSeeSection(section, canEditSettings),
+  );
+
   return (
     <section className="animate-in fade-in-50 duration-200">
       {/* Identity */}
@@ -251,7 +267,7 @@ export function SettingsOverview({
 
       {/* Status tiles */}
       <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {tiles.map(({ section, loading, subtitle }) => {
+        {visibleTiles.map(({ section, loading, subtitle }) => {
           const meta = SECTION_META[section];
           const Icon = meta.icon;
           return (
