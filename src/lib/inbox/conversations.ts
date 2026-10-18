@@ -87,3 +87,32 @@ export function sortByLatestMessage(
 ): Conversation[] {
   return [...conversations].sort((a, b) => activityTime(b) - activityTime(a));
 }
+
+/**
+ * The time shown on a chat in the list, the way WhatsApp shows it:
+ * the time for today, "Yesterday", the weekday within the last week,
+ * otherwise a short date.
+ */
+export function formatListTime(
+  iso: string | null | undefined,
+  labels: { yesterday: string },
+  now: Date = new Date(),
+  locale?: string,
+): string {
+  if (!iso) return "";
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return "";
+  const startOfDay = (d: Date) =>
+    new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((startOfDay(now) - startOfDay(at)) / 86_400_000);
+  if (days <= 0) {
+    return at.toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" });
+  }
+  if (days === 1) return labels.yesterday;
+  if (days < 7) return at.toLocaleDateString(locale, { weekday: "long" });
+  return at.toLocaleDateString(locale, {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+  });
+}
