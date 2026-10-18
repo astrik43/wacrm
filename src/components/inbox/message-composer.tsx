@@ -629,12 +629,12 @@ export function MessageComposer({
           </Button>
         </div>
       ) : (
-        // Phones: the text box takes its own full-width first line and
-        // the buttons wrap below it (Send pushed right). One row from
-        // `sm` up. Without the wrap, four buttons + Send left the text
-        // box too narrow for its placeholder and pushed the page wider
-        // than the screen.
+        // Phones: text box + Send on the first line, the other buttons
+        // on a second line below. One row from `sm` up. Without the
+        // wrap, four buttons + Send left the text box too narrow for its
+        // placeholder and pushed the page wider than the screen.
         <div className="flex flex-wrap items-end gap-2 sm:flex-nowrap">
+          <div className="order-3 flex basis-full items-end gap-2 sm:order-none sm:basis-auto">
           {/* Attach menu — photo / video / document / voice. */}
           <DropdownMenu>
             <DropdownMenuTrigger
@@ -730,6 +730,7 @@ export function MessageComposer({
               <Sparkles className="h-4 w-4" />
             )}
           </GatedButton>
+          </div>
 
           <textarea
             ref={textareaRef}
@@ -750,7 +751,7 @@ export function MessageComposer({
             // The placeholder text also surfaces the read-only state.
             title={readOnly ? t("readOnlyTitle") : undefined}
             className={cn(
-              "order-first min-w-0 flex-1 basis-full resize-none rounded-xl border border-border bg-muted px-4 py-2.5 text-sm text-foreground placeholder-muted-foreground outline-none transition-colors focus:border-primary/50 sm:order-none sm:basis-0",
+              "order-1 min-w-0 flex-1 basis-0 resize-none rounded-xl border border-border bg-muted px-4 py-2.5 text-sm text-foreground placeholder-muted-foreground outline-none transition-colors focus:border-primary/50 sm:order-none",
               (sessionExpired || readOnly) && "cursor-not-allowed opacity-50"
             )}
           />
@@ -761,7 +762,7 @@ export function MessageComposer({
             gateReason="send messages"
             disabled={!text.trim() || sessionExpired || sending}
             onClick={handleSend}
-            className="ml-auto h-9 w-9 shrink-0 bg-primary p-0 hover:bg-primary/90 disabled:opacity-40 sm:ml-0"
+            className="order-2 h-9 w-9 shrink-0 bg-primary p-0 hover:bg-primary/90 disabled:opacity-40 sm:order-none"
           >
             <Send className="h-4 w-4" />
           </GatedButton>
