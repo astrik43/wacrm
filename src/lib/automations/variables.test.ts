@@ -45,6 +45,22 @@ describe('renderVariables', () => {
     );
   });
 
+  it('treats a name that is only the phone number as no name', () => {
+    for (const name of ['919731540246', '+91 97315 40246', '(973) 154-0246']) {
+      expect(
+        renderVariables('Hi {{contact.first_name | there}}! {{contact.name}}', {
+          contact: { ...contact, name },
+        })
+      ).toBe('Hi there! ');
+    }
+    // Real names with digits still count.
+    expect(
+      renderVariables('Hi {{contact.first_name | there}}', {
+        contact: { ...contact, name: 'Shop 24' },
+      })
+    ).toBe('Hi Shop');
+  });
+
   it('keeps message.text and vars working', () => {
     expect(
       renderVariables('{{message.text}} / {{ vars.source }}', {
