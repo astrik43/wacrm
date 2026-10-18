@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   matchesContactFilters,
+  formatListTime,
   normalizeConversation,
   sortByLatestMessage,
 } from "./conversations";
@@ -176,5 +177,29 @@ describe("sortByLatestMessage", () => {
       "msg",
       "empty-old",
     ]);
+  });
+});
+
+describe("formatListTime", () => {
+  const now = new Date(2026, 9, 18, 14, 10); // Sun 18 Oct 2026, 14:10 local
+  const at = (d: number, h = 9, m = 5) => new Date(2026, 9, d, h, m).toISOString();
+  const labels = { yesterday: "Yesterday" };
+
+  it("shows the time for today", () => {
+    expect(formatListTime(at(18, 9, 5), labels, now, "en-GB")).toBe("9:05");
+  });
+
+  it("shows Yesterday, then the weekday within a week", () => {
+    expect(formatListTime(at(17, 23, 59), labels, now, "en-GB")).toBe("Yesterday");
+    expect(formatListTime(at(14), labels, now, "en-GB")).toBe("Wednesday");
+  });
+
+  it("shows a short date for anything older", () => {
+    expect(formatListTime(at(10), labels, now, "en-GB")).toBe("10/10/26");
+  });
+
+  it("is empty without a time", () => {
+    expect(formatListTime(null, labels, now)).toBe("");
+    expect(formatListTime("not a date", labels, now)).toBe("");
   });
 });
