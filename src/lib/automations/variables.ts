@@ -53,6 +53,16 @@ export function usesContactVariables(s: string): boolean {
   return false;
 }
 
+/**
+ * A contact created from a number with no WhatsApp profile name is named
+ * after its phone number. That's not a name to greet anyone by ("Hi
+ * 919731540246!"), so it reads as empty and the fallback applies.
+ */
+function realName(name: string | null | undefined): string {
+  const trimmed = name?.trim() ?? '';
+  return /^\+?[\d\s().-]{6,}$/.test(trimmed) ? '' : trimmed;
+}
+
 function contactValue(
   contact: ContactForVariables | null | undefined,
   field: string
@@ -62,9 +72,9 @@ function contactValue(
     case 'id':
       return contact.id;
     case 'name':
-      return contact.name?.trim() ?? '';
+      return realName(contact.name);
     case 'first_name':
-      return contact.name?.trim().split(/\s+/)[0] ?? '';
+      return realName(contact.name).split(/\s+/)[0] ?? '';
     case 'phone':
       return contact.phone ? `+${contact.phone.replace(/^\+/, '')}` : '';
     case 'email':
