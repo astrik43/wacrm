@@ -94,6 +94,10 @@ and when the shipment is out for delivery or delivered.
   edited to a chosen number immediately, using the latest order's
   values.
 
+> **Migration required:** apply `supabase/migrations/052_profile_appearance.sql`
+> (`theme`, `color_mode` on `profiles`) **before** deploying — the
+> profile fetch reads both columns.
+
 > **Migration required:** apply `supabase/migrations/051_push_subscriptions.sql`
 > (new `push_subscriptions` table) and set `VAPID_PUBLIC_KEY`,
 > `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` to enable phone notifications
@@ -106,6 +110,10 @@ and when the shipment is out for delivery or delivered.
 > **Migration required:** apply `supabase/migrations/049_shopify_test_mode.sql`
 > (`test_mode` and `test_phones` on `shopify_configs`, `is_test` on
 > `shopify_notifications`). Apply it **before** deploying this version.
+
+- **Theme follows you.** The accent colour and light/dark mode are
+  saved to your profile, so they apply on every device and survive the
+  browser clearing its storage.
 
 - **Installable app + phone notifications.** wacrm can be installed
   on Android, iPhone (Add to Home Screen) and desktop, opening into the

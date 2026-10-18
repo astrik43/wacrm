@@ -9,6 +9,7 @@ import { Header } from "@/components/layout/header";
 import { AccountAccessAlert } from "@/components/layout/account-access-alert";
 import { PresenceHeartbeat } from "@/components/presence/presence-heartbeat";
 import { BrowserNotificationsListener } from "@/components/notifications/browser-notifications-listener";
+import { ThemeSync } from "@/components/theme/theme-sync";
 
 // Auth-gated dashboard shell. Extracted from the layout so the layout
 // itself can stay a server component and export metadata (noindex) —
@@ -54,6 +55,8 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
       {/* Desktop alerts for new customer messages (opt-in via Settings →
           Your profile). Headless — renders nothing. */}
       <BrowserNotificationsListener />
+      {/* Theme follows the member across devices. Headless. */}
+      <ThemeSync />
       <Sidebar open={sidebarOpen} onClose={closeSidebar} />
       {/* min-w-0 + overflow-x-hidden: one over-wide child (a long
           link, a wide table) must not make the whole page scroll

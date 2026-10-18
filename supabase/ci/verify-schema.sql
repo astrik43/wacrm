@@ -202,6 +202,15 @@ BEGIN
     RAISE EXCEPTION 'push_subscriptions is missing — migration 051 did not apply';
   END IF;
 
+  -- Per-member appearance (052), read by the auth profile fetch.
+  IF (
+    SELECT COUNT(*) FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'profiles'
+      AND column_name IN ('theme', 'color_mode')
+  ) <> 2 THEN
+    RAISE EXCEPTION 'profiles.theme / color_mode are missing — migration 052 did not apply';
+  END IF;
+
   RAISE NOTICE 'schema verification passed';
 END
 $$;
