@@ -30,7 +30,7 @@ import {
   parseFlexypeAbandonedCheckout,
 } from '@/lib/flexype/acr';
 import { getShopifyConfigByToken } from '@/lib/shopify/config';
-import { processFlexypeCheckout } from '@/lib/shopify/process';
+import { processExternalCheckout } from '@/lib/shopify/process';
 import {
   finishWebhookEvent,
   recordWebhookEvent,
@@ -158,7 +158,7 @@ export async function POST(
         return;
       }
 
-      const result = await processFlexypeCheckout(
+      const result = await processExternalCheckout(
         db,
         config,
         parsed.checkout,

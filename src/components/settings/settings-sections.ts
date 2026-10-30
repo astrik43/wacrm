@@ -1,10 +1,12 @@
 import {
   Coins,
+  CreditCard,
   FileText,
   KeyRound,
   LayoutGrid,
   Palette,
   PlugZap,
+  Rocket,
   Shield,
   ShoppingBag,
   Tags,
@@ -35,6 +37,8 @@ export const SETTINGS_SECTIONS = [
   'members',
   'api',
   'shopify',
+  'flexype',
+  'shiprocket',
 ] as const;
 
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
@@ -68,6 +72,9 @@ export const SECTION_META: Record<SettingsSection, SectionMeta> = {
   members: { id: 'members', label: 'Team members', icon: UsersRound, group: 'workspace', adminOnly: true },
   api: { id: 'api', label: 'API keys', icon: KeyRound, group: 'workspace', adminOnly: true },
   shopify: { id: 'shopify', label: 'Shopify', icon: ShoppingBag, group: 'workspace', adminOnly: true },
+  // Third-party checkouts whose abandoned carts feed Shopify's reminders.
+  flexype: { id: 'flexype', label: 'FlexyPe', icon: CreditCard, group: 'workspace', adminOnly: true },
+  shiprocket: { id: 'shiprocket', label: 'Shiprocket', icon: Rocket, group: 'workspace', adminOnly: true },
 };
 
 export const RAIL_GROUPS: { label: string | null; group: SectionMeta['group'] }[] = [

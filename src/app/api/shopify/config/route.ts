@@ -26,6 +26,10 @@
 // on with a new random secret, `{ flexype: null }` switches it off.
 // Unlike the others this secret is generated here and shown to admins,
 // because they have to paste it into FlexyPe.
+//
+// Shiprocket Checkout (Fastrr): `{ shiprocket: 'generate' | null }`,
+// the same way. The secret goes into a header of Shiprocket's webhook.
+// Both checkouts may be on at once.
 // ============================================================
 
 import { NextResponse } from 'next/server';
@@ -52,15 +56,17 @@ import { normalizeShopifyPhone } from '@/lib/shopify/phone';
 import {
   flexypeWebhookPath,
   generateWebhookToken,
+  shiprocketWebhookPath,
   shopifyWebhookPath,
 } from '@/lib/shopify/config';
 import { decrypt, encrypt } from '@/lib/whatsapp/encryption';
 
 // `webhook_secret`, `api_client_secret` and `api_access_token` are
 // deliberately excluded — they never leave the server.
-// `flexype_secret` is read so present() can show it to admins only.
+// `flexype_secret` / `shiprocket_secret` are read so present() can
+// show them to admins only.
 const SAFE_COLUMNS =
-  'id, webhook_token, shop_domain, default_country_code, is_active, last_webhook_at, created_at, api_client_id, api_scopes, flexype_secret, flexype_last_webhook_at, test_mode, test_phones';
+  'id, webhook_token, shop_domain, default_country_code, is_active, last_webhook_at, created_at, api_client_id, api_scopes, flexype_secret, flexype_last_webhook_at, shiprocket_secret, shiprocket_last_webhook_at, test_mode, test_phones';
 
 const MAX_SECRET_LEN = 256;
 const MAX_TEST_PHONES = 5;
@@ -77,38 +83,61 @@ interface ConfigRow {
   api_scopes?: string | null;
   flexype_secret?: string | null;
   flexype_last_webhook_at?: string | null;
+  shiprocket_secret?: string | null;
+  shiprocket_last_webhook_at?: string | null;
   test_mode?: boolean | null;
   test_phones?: string[] | null;
 }
 
-function revealFlexypeSecret(ciphertext: string): string | null {
+function revealSecret(ciphertext: string, label: string): string | null {
   try {
     return decrypt(ciphertext);
   } catch (err) {
     console.error(
-      '[shopify config] could not decrypt FlexyPe secret:',
+      `[shopify config] could not decrypt ${label} secret:`,
       err instanceof Error ? err.message : err
     );
     return null;
   }
 }
 
-function present(row: ConfigRow, includeWebhookPath: boolean) {
-  const flexypeOn = Boolean(row.flexype_secret);
+/** A third-party checkout's connection, as its settings card shows it. */
+function presentCheckout(
+  ciphertext: string | null | undefined,
+  lastWebhookAt: string | null | undefined,
+  webhookPath: string,
+  label: string,
+  includeWebhookPath: boolean
+) {
+  const on = Boolean(ciphertext);
   return {
-    flexype: {
-      enabled: flexypeOn,
-      last_webhook_at: row.flexype_last_webhook_at ?? null,
-      // Admins only, like the Shopify webhook URL.
-      webhook_path:
-        flexypeOn && includeWebhookPath
-          ? flexypeWebhookPath(row.webhook_token)
-          : null,
-      secret:
-        flexypeOn && includeWebhookPath && row.flexype_secret
-          ? revealFlexypeSecret(row.flexype_secret)
-          : null,
-    },
+    enabled: on,
+    last_webhook_at: lastWebhookAt ?? null,
+    // Admins only, like the Shopify webhook URL.
+    webhook_path: on && includeWebhookPath ? webhookPath : null,
+    secret:
+      on && includeWebhookPath && ciphertext
+        ? revealSecret(ciphertext, label)
+        : null,
+  };
+}
+
+function present(row: ConfigRow, includeWebhookPath: boolean) {
+  return {
+    flexype: presentCheckout(
+      row.flexype_secret,
+      row.flexype_last_webhook_at,
+      flexypeWebhookPath(row.webhook_token),
+      'FlexyPe',
+      includeWebhookPath
+    ),
+    shiprocket: presentCheckout(
+      row.shiprocket_secret,
+      row.shiprocket_last_webhook_at,
+      shiprocketWebhookPath(row.webhook_token),
+      'Shiprocket',
+      includeWebhookPath
+    ),
     // Every member sees that test mode is on; the numbers are admin-only.
     test_mode: row.test_mode === true,
     test_phones: includeWebhookPath ? (row.test_phones ?? []) : [],
@@ -178,6 +207,7 @@ export async function PUT(request: Request) {
       api_client_secret?: unknown;
       shop_domain?: unknown;
       flexype?: unknown;
+      shiprocket?: unknown;
       test_mode?: unknown;
       test_phones?: unknown;
     } | null;
@@ -242,6 +272,19 @@ export async function PUT(request: Request) {
       } else {
         return NextResponse.json(
           { error: "'flexype' must be 'generate' or null" },
+          { status: 400 }
+        );
+      }
+    }
+
+    if (body?.shiprocket !== undefined) {
+      if (body.shiprocket === null) {
+        patch.shiprocket_secret = null;
+      } else if (body.shiprocket === 'generate') {
+        patch.shiprocket_secret = encrypt(generateWebhookToken());
+      } else {
+        return NextResponse.json(
+          { error: "'shiprocket' must be 'generate' or null" },
           { status: 400 }
         );
       }

@@ -19,9 +19,9 @@
 import {
   firstLineItemRef,
   sanitizeTemplateValue,
-  type LineItemRef,
   type ShopifyFields,
 } from '@/lib/shopify/order-fields';
+import type { ExternalCheckout } from '@/lib/shopify/external-checkout';
 import { pickOrderPhone } from '@/lib/shopify/phone';
 
 type Json = Record<string, unknown>;
@@ -44,17 +44,8 @@ export function isFlexypeSample(checkout: FlexypeCheckout): boolean {
   return checkout.phone !== null && SAMPLE_PHONES.includes(checkout.phone);
 }
 
-export interface FlexypeCheckout {
-  /** `flexype:<session id>` — the shopify_checkouts key. */
-  checkoutId: string;
-  /** Digits-only E.164, or null when none could be placed. */
-  phone: string | null;
-  customerName: string | null;
-  fields: ShopifyFields;
-  /** First cart item, to look its picture up when FlexyPe sent none. */
-  lineItem: LineItemRef | null;
-  shopDomain: string | null;
-}
+/** `checkoutId` is `flexype:<session id>`. */
+export type FlexypeCheckout = ExternalCheckout;
 
 export type ParseResult =
   | { ok: true; checkout: FlexypeCheckout }

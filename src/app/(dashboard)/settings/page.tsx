@@ -19,6 +19,7 @@ import { DealsSettings } from '@/components/settings/deals-settings';
 import { MembersTab } from '@/components/settings/members-tab';
 import { ApiKeysSettings } from '@/components/settings/api-keys-settings';
 import { ShopifySettings } from '@/components/settings/shopify-settings';
+import { CheckoutConnectionSettings } from '@/components/settings/checkout-connection-settings';
 import {
   resolveSection,
   type SettingsSection,
@@ -85,6 +86,20 @@ function SettingsPageInner() {
     members: <MembersTab />,
     api: <ApiKeysSettings />,
     shopify: <ShopifySettings />,
+    flexype: (
+      <CheckoutConnectionSettings
+        key="flexype"
+        provider="flexype"
+        onOpenShopify={() => go('shopify')}
+      />
+    ),
+    shiprocket: (
+      <CheckoutConnectionSettings
+        key="shiprocket"
+        provider="shiprocket"
+        onOpenShopify={() => go('shopify')}
+      />
+    ),
   };
 
   return (

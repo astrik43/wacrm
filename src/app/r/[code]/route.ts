@@ -9,7 +9,7 @@
 //   t… → the shipment's tracking link (falling back to the order's
 //        status page while the courier hasn't given one yet)
 //   s… → the order's status page
-//   c… → the abandoned checkout's cart link (FlexyPe or Shopify)
+//   c… → the abandoned checkout's cart link (Shopify, FlexyPe or Shiprocket)
 //
 // Public — customers open it from WhatsApp. Anything unknown, unsigned
 // or without a link gets a plain "link not available" page, never a

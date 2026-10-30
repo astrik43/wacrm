@@ -20,7 +20,7 @@ describe('settings sections by role', () => {
   });
 
   it('sends a non-admin deep link to workspace configuration back to the overview', () => {
-    for (const tab of ['whatsapp', 'shopify', 'members', 'api', 'templates', 'deals', 'fields', 'tags']) {
+    for (const tab of ['whatsapp', 'shopify', 'flexype', 'shiprocket', 'members', 'api', 'templates', 'deals', 'fields', 'tags']) {
       expect(resolveSection(tab, false)).toBe('overview');
     }
     expect(resolveSection('quick-replies', false)).toBe('quick-replies');

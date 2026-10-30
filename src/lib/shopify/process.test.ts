@@ -16,7 +16,7 @@ vi.mock('./admin-api', () => ({ fetchLineItemImage: mocks.fetchImage }));
 
 import type { ShopifyConfigRow } from './config';
 import { parseLinkCode } from './link-codes';
-import { processFlexypeCheckout, processShopifyWebhook } from './process';
+import { processExternalCheckout, processShopifyWebhook } from './process';
 
 const CONFIG: ShopifyConfigRow = {
   id: 'cfg-1',
@@ -34,6 +34,8 @@ const CONFIG: ShopifyConfigRow = {
   api_scopes: null,
   flexype_secret: null,
   flexype_last_webhook_at: null,
+  shiprocket_secret: null,
+  shiprocket_last_webhook_at: null,
   test_mode: false,
   test_phones: [],
 };
@@ -737,7 +739,7 @@ describe('FlexyPe abandoned checkouts', () => {
   it('stores the checkout and claims all three reminders for it', async () => {
     mocks.notify.mockResolvedValue({ status: 'scheduled', sendAt: 'x' });
     const state = freshState();
-    const result = await processFlexypeCheckout(fakeDb(state), CONFIG, CART, 'evt-1');
+    const result = await processExternalCheckout(fakeDb(state), CONFIG, CART, 'evt-1');
 
     expect(state.checkoutUpserts[0].row).toMatchObject({
       account_id: 'acct-1',
@@ -772,7 +774,7 @@ describe('FlexyPe abandoned checkouts', () => {
     const state = freshState();
     const noPicture: Record<string, string> = { ...CART.fields };
     delete noPicture.product_image_url;
-    await processFlexypeCheckout(
+    await processExternalCheckout(
       fakeDb(state),
       CONFIG,
       { ...CART, fields: noPicture },
@@ -790,7 +792,7 @@ describe('FlexyPe abandoned checkouts', () => {
 
   it('schedules nothing without a phone', async () => {
     const state = freshState();
-    const result = await processFlexypeCheckout(
+    const result = await processExternalCheckout(
       fakeDb(state),
       CONFIG,
       { ...CART, phone: null },
@@ -895,7 +897,7 @@ describe('testing mode — only test numbers get through', () => {
 
   it('drops a FlexyPe cart for anyone else', async () => {
     const state = freshState();
-    const result = await processFlexypeCheckout(
+    const result = await processExternalCheckout(
       fakeDb(state),
       { ...TESTING, test_phones: ['919999999999'] },
       {
@@ -989,7 +991,7 @@ describe('automatic contact tags', () => {
   });
 
   it('tags an abandoned FlexyPe cart', async () => {
-    await processFlexypeCheckout(
+    await processExternalCheckout(
       fakeDb(freshState()),
       CONFIG,
       {
