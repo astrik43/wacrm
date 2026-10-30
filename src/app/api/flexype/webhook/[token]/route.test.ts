@@ -35,7 +35,7 @@ vi.mock('@/lib/shopify/config', () => ({
 }));
 
 vi.mock('@/lib/shopify/process', () => ({
-  processFlexypeCheckout: h.process,
+  processExternalCheckout: h.process,
 }));
 
 vi.mock('@/lib/shopify/webhook-log', () => ({

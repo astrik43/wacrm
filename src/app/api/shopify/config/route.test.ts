@@ -391,6 +391,40 @@ describe('/api/shopify/config', () => {
     expect((await (await GET()).json()).config.flexype.enabled).toBe(false);
   });
 
+  it('PUT switches Shiprocket on and off, independently of FlexyPe', async () => {
+    state.existing = ROW;
+    expect((await put({ shiprocket: 'generate' })).status).toBe(200);
+    expect(state.updates[0]).toEqual({
+      shiprocket_secret: expect.stringMatching(/^enc:[A-Za-z0-9_-]{32}$/),
+    });
+
+    expect((await put({ shiprocket: null })).status).toBe(200);
+    expect(state.updates[1]).toEqual({ shiprocket_secret: null });
+
+    expect((await put({ shiprocket: true })).status).toBe(400);
+  });
+
+  it('GET shows the Shiprocket URL and secret to admins only', async () => {
+    state.existing = { ...ROW, shiprocket_secret: 'enc:sr-secret' };
+
+    mocks.getCurrentAccount.mockResolvedValue(ctx(state, 'agent'));
+    const agent = await (await GET()).json();
+    expect(agent.config.shiprocket).toMatchObject({
+      enabled: true,
+      webhook_path: null,
+      secret: null,
+    });
+    expect(JSON.stringify(agent)).not.toContain('sr-secret');
+
+    mocks.getCurrentAccount.mockResolvedValue(ctx(state, 'admin'));
+    const admin = await (await GET()).json();
+    expect(admin.config.shiprocket).toMatchObject({
+      webhook_path: '/api/shiprocket/webhook/tok_abcdefghijklmnop',
+      secret: 'sr-secret',
+    });
+    expect(admin.config.flexype.enabled).toBe(false);
+  });
+
   it('DELETE requires admin and removes the connection', async () => {
     const response = await DELETE();
     expect(response.status).toBe(200);

@@ -15,7 +15,7 @@
 //     falls back to the phone on the shipment's destination address.
 //
 // Abandoned checkouts (`checkouts/*`, or FlexyPe's abandoned-checkout
-// webhook via processFlexypeCheckout) schedule up to three cart
+// / Shiprocket's abandon-cart webhooks via processExternalCheckout) schedule up to three cart
 // reminders; a completed checkout, or an order from the same phone or
 // FlexyPe session, cancels the ones still waiting.
 // ============================================================
@@ -25,8 +25,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   FLEXYPE_CHECKOUT_PREFIX,
   flexypeSessionOfOrder,
-  type FlexypeCheckout,
 } from '@/lib/flexype/acr';
+import type { ExternalCheckout } from '@/lib/shopify/external-checkout';
 
 import { fetchLineItemImage } from './admin-api';
 import { generateWebhookToken, type ShopifyConfigRow } from './config';
@@ -455,16 +455,19 @@ async function scheduleCartReminders(
 }
 
 /**
- * A FlexyPe abandoned checkout (already parsed — see
- * src/lib/flexype/acr.ts). FlexyPe fires once per abandoned session,
- * after it has already waited 15 minutes, so there is no stale-update
- * or completion handling: the order that completes it arrives through
- * Shopify's orders/create and cancels the reminders in handleOrder.
+ * A third-party checkout's abandoned cart (already parsed — see
+ * src/lib/flexype/acr.ts and src/lib/shiprocket/abandoned-cart.ts).
+ * These fire once the provider has decided the cart is abandoned, so
+ * there is no stale-update or completion handling: the order that
+ * completes it arrives through Shopify's orders/create and cancels the
+ * reminders in handleOrder (by phone, or FlexyPe's session id). A
+ * repeat delivery for the same cart refreshes its fields and finds its
+ * reminders already claimed.
  */
-export async function processFlexypeCheckout(
+export async function processExternalCheckout(
   db: SupabaseClient,
   config: ShopifyConfigRow,
-  cart: FlexypeCheckout,
+  cart: ExternalCheckout,
   eventId: string | null
 ): Promise<ProcessResult> {
   const accountId = config.account_id;
@@ -473,7 +476,7 @@ export async function processFlexypeCheckout(
     return { orderRef, note: 'test_mode', outcomes: [] };
   }
   const fields = { ...cart.fields };
-  // FlexyPe normally sends the picture; fall back to Shopify's.
+  // The checkout normally sends the picture; fall back to Shopify's.
   if (!fields.product_image_url) {
     const imageUrl = await fetchLineItemImage(db, config, cart.lineItem);
     if (imageUrl) fields.product_image_url = imageUrl;
@@ -495,7 +498,7 @@ export async function processFlexypeCheckout(
     { onConflict: 'account_id,shopify_checkout_id' }
   );
   if (error) {
-    console.error('[flexype] checkout upsert failed:', error.message);
+    console.error('[checkout] upsert failed:', cart.checkoutId, error.message);
     return { orderRef, note: 'db_error', outcomes: [] };
   }
   if (!cart.phone) return { orderRef, note: 'no_phone', outcomes: [] };

@@ -83,7 +83,7 @@ For a cart reminder's example, use
 `https://<your CRM domain>/r/cZmxleHlwZTphYmMxMjN4eXo.Mq7wR2xLp9TzK4vB`.
 
 When the customer taps it, the CRM looks up that shipment, order or
-abandoned checkout (Shopify or FlexyPe) and redirects to its link **as it is at that moment** — so changing
+abandoned checkout (Shopify, FlexyPe or Shiprocket) and redirects to its link **as it is at that moment** — so changing
 courier or tracking partner needs no template change, and a tracking
 link Shopify adds or changes later is picked up. A shipment without a
 tracking link yet goes to the order page instead. Each code is signed
@@ -213,7 +213,8 @@ Up to three reminders for a checkout that was started and not finished.
 > checkouts that happen in Shopify's own checkout. If your store uses a
 > separate checkout app, carts abandoned there may never reach wacrm.
 > Add the two webhooks and watch the Webhook log for `checkouts/create`
-> before relying on reminders. For FlexyPe, see below.
+> before relying on reminders. For FlexyPe or Shiprocket Checkout, see
+> below.
 
 ### FlexyPe checkout
 
@@ -222,7 +223,7 @@ not Shopify — knows about abandoned carts, and sends its own
 *Abandoned Checkout Recovery* webhook 15 minutes after a checkout is
 left unfinished. wacrm turns those into the same cart reminders.
 
-1. Under **Settings → Shopify → FlexyPe abandoned checkouts**, press
+1. Under **Settings → FlexyPe**, press
    **Connect FlexyPe**. wacrm shows a webhook URL and a secret.
 2. In FlexyPe, open **Settings → Webhooks**, add an endpoint with that
    URL and secret, and subscribe to **Abandoned Checkout Recovery**
@@ -245,6 +246,43 @@ left unfinished. wacrm turns those into the same cart reminders.
   them too.
 - **New secret** replaces the secret; update it in FlexyPe straight
   away. **Disconnect FlexyPe** makes the URL answer `404`.
+
+### Shiprocket Checkout (Fastrr)
+
+If the store checks out through [Shiprocket Checkout](https://checkout.shiprocket.in)
+(formerly fastrr), Shiprocket — not Shopify — knows about abandoned
+carts and sends its own *Abandon Cart* webhook. wacrm turns those into
+the same cart reminders. FlexyPe and Shiprocket can both stay
+connected, so switching checkouts needs no change here.
+
+1. Under **Settings → Shiprocket**, press **Connect Shiprocket**. wacrm
+   shows a webhook URL, a header name (`X-Chatstrik-Secret`) and a
+   secret.
+2. In the Shiprocket Checkout dashboard, open **Settings → Webhooks →
+   Add webhook**: type **Abandon Cart**, stage **Production**, API
+   endpoint = the URL, and under **Headers** add `X-Chatstrik-Secret`
+   with the secret as its value. (`Authorization: Bearer <secret>` is
+   accepted too.)
+3. The next abandoned cart appears in the Webhook log as
+   `shiprocket/abandoned_cart`, with its raw payload.
+4. Set up the reminders under **Cart reminders** as above. Use
+   *Checkout recovery link (button suffix)* with the CRM's own
+   `https://<your wacrm domain>/r/` base, or *Checkout recovery link*
+   in the body.
+
+- Shiprocket publishes no schema for this webhook. wacrm reads the flat
+  cart it sends (`cart_id`, `phone_number`, `first_name`, `last_name`,
+  `checkout_url`, `total_price`, `latest_stage`, `items[]`) and common
+  variants of those names. Check the first deliveries in the Webhook log;
+  a payload with no cart id is logged as `missing_id`.
+- A delivery whose `latest_stage` says the order was placed is ignored.
+- Repeat deliveries for the same cart refresh its details but schedule
+  nothing new. An order from the same phone number cancels the waiting
+  reminders (Shiprocket's orders carry no cart id).
+- When Shiprocket sends no product picture, wacrm uses Shopify's (needs
+  the Shopify app credentials).
+- **New secret** replaces the secret; update it in Shiprocket straight
+  away. **Disconnect Shiprocket** makes the URL answer `404`.
 
 ## Product image in the message
 
@@ -294,7 +332,7 @@ land in the same audiences:
 |---|---|---|
 | **Order Placed(CoD)** | a cash-on-delivery order is placed | never |
 | **Order Placed(Prepaid)** | a prepaid order is placed | never |
-| **Abandoned Cart** | a Shopify or FlexyPe checkout is abandoned | the customer places an order |
+| **Abandoned Cart** | a Shopify, FlexyPe or Shiprocket checkout is abandoned | the customer places an order |
 
 A customer who ordered both ways has both order tags. Shipment progress
 (shipped, delivered, RTO…) is not tagged: with several orders in flight

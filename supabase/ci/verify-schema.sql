@@ -211,6 +211,17 @@ BEGIN
     RAISE EXCEPTION 'profiles.theme / color_mode are missing — migration 052 did not apply';
   END IF;
 
+  -- Shiprocket Checkout abandoned carts (053). Read by the Shiprocket
+  -- webhook through an untyped client.
+  IF (
+    SELECT COUNT(*) FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'shopify_configs'
+      AND column_name IN ('shiprocket_secret', 'shiprocket_last_webhook_at')
+  ) <> 2 THEN
+    RAISE EXCEPTION
+      'shopify_configs.shiprocket_* columns are missing — migration 053 did not apply';
+  END IF;
+
   RAISE NOTICE 'schema verification passed';
 END
 $$;

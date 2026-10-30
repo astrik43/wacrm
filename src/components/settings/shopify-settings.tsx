@@ -69,14 +69,6 @@ interface ShopifyConfig {
   can_tag_orders: boolean | null;
   /** Null for non-admins. */
   api_client_id: string | null;
-  flexype: {
-    enabled: boolean;
-    last_webhook_at: string | null;
-    /** Null for non-admins. */
-    webhook_path: string | null;
-    /** Null for non-admins. */
-    secret: string | null;
-  };
 }
 
 interface ShopifyNotification {
@@ -332,11 +324,6 @@ export function ShopifySettings() {
     }
   }
 
-  async function handleFlexype(next: 'generate' | null) {
-    const ok = await putConfig({ flexype: next });
-    if (ok) toast.success(next ? t('flexypeOnToast') : t('flexypeOffToast'));
-  }
-
   async function copyWebhookUrl(url: string) {
     try {
       await navigator.clipboard.writeText(url);
@@ -377,10 +364,6 @@ export function ShopifySettings() {
   const webhookUrl =
     config?.webhook_path && typeof window !== 'undefined'
       ? `${window.location.origin}${config.webhook_path}`
-      : null;
-  const flexypeUrl =
-    config?.flexype?.webhook_path && typeof window !== 'undefined'
-      ? `${window.location.origin}${config.flexype.webhook_path}`
       : null;
 
   return (
@@ -632,105 +615,6 @@ export function ShopifySettings() {
                   onClick={handleRemoveApi}
                 >
                   {t('apiRemove')}
-                </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* ---- FlexyPe abandoned checkouts ------------------------ */}
-      {config && canEditSettings && (
-        <Card>
-          <CardContent className="space-y-4 p-4">
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-foreground text-sm font-semibold">
-                  {t('flexypeTitle')}
-                </h3>
-                <Badge className="border-border bg-muted text-muted-foreground text-[10px] tracking-wide uppercase">
-                  {config.flexype?.enabled ? t('flexypeOn') : t('flexypeOff')}
-                </Badge>
-                {config.flexype?.enabled && (
-                  <span className="text-muted-foreground text-xs">
-                    {config.flexype.last_webhook_at
-                      ? t('lastEvent', {
-                          date: fmtDateTime(config.flexype.last_webhook_at),
-                        })
-                      : t('noEventsYet')}
-                  </span>
-                )}
-              </div>
-              <p className="text-muted-foreground mt-1 text-sm">
-                {t('flexypeDesc')}
-              </p>
-            </div>
-
-            {config.flexype?.enabled && flexypeUrl && (
-              <div className="space-y-3">
-                {[
-                  { id: 'flexype-url', label: t('flexypeUrlLabel'), value: flexypeUrl },
-                  {
-                    id: 'flexype-secret',
-                    label: t('flexypeSecretLabel'),
-                    value: config.flexype.secret ?? '',
-                  },
-                ].map((row) => (
-                  <div key={row.id} className="space-y-1.5">
-                    <Label htmlFor={row.id} className="text-muted-foreground">
-                      {row.label}
-                    </Label>
-                    <div className="flex gap-2">
-                      <Input
-                        id={row.id}
-                        readOnly
-                        value={row.value}
-                        className="font-mono text-xs"
-                        onFocus={(e) => e.currentTarget.select()}
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        disabled={!row.value}
-                        onClick={() => copyWebhookUrl(row.value)}
-                      >
-                        <Copy className="size-4" />
-                        {t('copy')}
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-                <ol className="text-muted-foreground list-decimal space-y-1 pl-5 text-xs">
-                  <li>{t('flexypeStep1')}</li>
-                  <li>{t('flexypeStep2')}</li>
-                  <li>{t('flexypeStep3')}</li>
-                  <li>{t('flexypeStep4')}</li>
-                </ol>
-              </div>
-            )}
-
-            <div className="flex flex-wrap gap-2">
-              {config.flexype?.enabled ? (
-                <>
-                  <Button
-                    variant="outline"
-                    disabled={saving}
-                    onClick={() => handleFlexype('generate')}
-                  >
-                    {t('flexypeRegenerate')}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    disabled={saving}
-                    onClick={() => handleFlexype(null)}
-                  >
-                    {t('flexypeTurnOff')}
-                  </Button>
-                </>
-              ) : (
-                <Button disabled={saving} onClick={() => handleFlexype('generate')}>
-                  {saving ? <Loader2 className="size-4 animate-spin" /> : null}
-                  {t('flexypeTurnOn')}
                 </Button>
               )}
             </div>

@@ -11,6 +11,15 @@ and polish.
 
 ## [Unreleased]
 
+- **Shiprocket Checkout (Fastrr) abandoned carts.** Stores that check
+  out through Shiprocket can connect it under Settings → Shiprocket:
+  its "Abandon Cart" webhook feeds the same three cart reminders as
+  Shopify and FlexyPe checkouts. FlexyPe moved out of Settings → Shopify
+  into its own Settings → FlexyPe entry; both can stay switched on.
+
+> **Migration required:** apply `supabase/migrations/053_shiprocket_abandoned_cart.sql`
+> (two new columns on `shopify_configs`).
+
 Adds **Shopify order updates**: customers get a WhatsApp template when
 their order is created or cancelled, when tracking is added or changed,
 and when the shipment is out for delivery or delivered.

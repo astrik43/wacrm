@@ -47,6 +47,8 @@ function config(overrides: Partial<ShopifyConfigRow> = {}): ShopifyConfigRow {
     api_scopes: 'read_products',
     flexype_secret: null,
     flexype_last_webhook_at: null,
+    shiprocket_secret: null,
+    shiprocket_last_webhook_at: null,
     test_mode: false,
     test_phones: [],
     ...overrides,

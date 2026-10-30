@@ -1,5 +1,5 @@
 // ============================================================
-// Automatic contact tags from Shopify / FlexyPe behaviour, so
+// Automatic contact tags from Shopify / FlexyPe / Shiprocket behaviour, so
 // broadcasts can target COD customers, prepaid customers and abandoned
 // carts. The names match the ones Interakt used, so contacts imported
 // from Interakt and new customers share the same tags.
