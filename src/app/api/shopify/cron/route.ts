@@ -3,7 +3,9 @@
 //
 // Sends the Shopify notifications whose delay has run out (cart
 // reminders, any update with a delay) and retries order tags Shopify
-// didn't take from the COD confirmation page.
+// didn't take from the COD confirmation page. Until it has caught up,
+// it also fills in the buttons of messages sent before they were stored
+// (backfill-buttons.ts).
 //
 // Nothing inside the app is scheduled: point an external scheduler at
 // this URL once a minute, with the shared secret in `x-cron-secret`
@@ -15,6 +17,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { NextResponse } from 'next/server';
 
 import { supabaseAdmin } from '@/lib/flows/admin-client';
+import { backfillTemplateButtons } from '@/lib/shopify/backfill-buttons';
 import { retryCodTags } from '@/lib/shopify/cod-confirm';
 import { runDueNotifications } from '@/lib/shopify/scheduled';
 
@@ -43,7 +46,11 @@ export async function GET(request: Request) {
       console.error('[shopify cron] tag retry failed:', err);
       return { retried: 0, synced: 0 };
     });
-    return NextResponse.json({ notifications, tags });
+    const backfill = await backfillTemplateButtons(db).catch((err) => {
+      console.error('[shopify cron] button backfill failed:', err);
+      return { filled: 0 };
+    });
+    return NextResponse.json({ notifications, tags, backfill });
   } catch (err) {
     console.error('[shopify cron] failed:', err);
     return NextResponse.json({ error: 'cron run failed' }, { status: 500 });
