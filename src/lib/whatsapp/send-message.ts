@@ -47,6 +47,7 @@ import {
   templateBodyParams,
   templateContentText,
 } from '@/lib/whatsapp/template-body';
+import { sentTemplatePayload } from '@/lib/whatsapp/sent-template';
 
 export const MEDIA_KINDS = ['image', 'video', 'document', 'audio'] as const;
 export const VALID_MESSAGE_TYPES = [
@@ -495,8 +496,14 @@ export async function sendMessageToConversation(
       content_text: persistedText,
       media_url: mediaUrl || null,
       template_name: templateName || null,
+      // Templates keep their header picture and buttons (links as
+      // sent) here, so the inbox can show them — see sent-template.ts.
       interactive_payload:
-        messageType === 'interactive' ? interactivePayload : null,
+        messageType === 'interactive'
+          ? interactivePayload
+          : messageType === 'template'
+            ? sentTemplatePayload(templateRow, templateMessageParams)
+            : null,
       message_id: waMessageId,
       status: 'sent',
       reply_to_message_id: replyToMessageId || null,
