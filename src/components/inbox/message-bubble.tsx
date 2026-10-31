@@ -24,6 +24,8 @@ import {
   MediaVideoBubble,
 } from "./message-media";
 import { InteractivePreview } from "@/components/interactive/interactive-preview";
+import { readSentTemplatePayload } from "@/lib/whatsapp/sent-template";
+import { TemplateButtons, TemplateHeaderMedia } from "./template-extras";
 import { useTranslations } from "next-intl";
 
 interface MessageBubbleProps {
@@ -154,7 +156,10 @@ function MessageContent({
       }
       return <MediaDocumentBubble message={message} t={t} />;
 
-    case "template":
+    case "template": {
+      // Header picture and buttons (links as sent), stored since the
+      // send path started keeping them; older rows have none.
+      const extras = readSentTemplatePayload(message.interactive_payload);
       // Templates are almost always outbound, where the bubble fill IS
       // `primary` — so the old `bg-primary/20 text-primary` chip was
       // primary-on-primary and invisible. Paired with a null
@@ -175,6 +180,7 @@ function MessageContent({
             <LayoutTemplate className="h-3 w-3" />
             {t("template")}
           </span>
+          {extras && <TemplateHeaderMedia payload={extras} />}
           {message.content_text ? (
             <p className="mt-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm">
               {formatWhatsAppText(message.content_text)}
@@ -186,8 +192,10 @@ function MessageContent({
               </p>
             )
           )}
+          {extras && <TemplateButtons payload={extras} isAgent={isAgent} />}
         </div>
       );
+    }
 
     case "location":
       return (

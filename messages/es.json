@@ -246,7 +246,9 @@
       "downloadFailed": "No se pudo descargar el adjunto",
       "viewImage": "Ver imagen",
       "expandVideo": "Ampliar video",
-      "imageAlt": "Imagen compartida"
+      "imageAlt": "Imagen compartida",
+      "codeCopied": "Código copiado",
+      "copyFailed": "No se pudo copiar"
     },
     "mediaViewer": {
       "counter": "{index} de {total}",

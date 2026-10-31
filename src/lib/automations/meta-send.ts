@@ -15,6 +15,7 @@ import {
   resolveTemplateRow,
   templateContentText,
 } from '@/lib/whatsapp/template-body'
+import { sentTemplatePayload } from '@/lib/whatsapp/sent-template'
 import { supabaseAdmin } from './admin-client'
 
 // ------------------------------------------------------------
@@ -263,6 +264,9 @@ async function sendViaMeta(input: SendInput): Promise<{ whatsapp_message_id: str
     content_type,
     content_text,
     template_name,
+    // Header picture and buttons, for the inbox (see sent-template.ts).
+    interactive_payload:
+      input.kind === 'template' ? sentTemplatePayload(templateRow, null) : null,
     message_id: waMessageId,
     status: 'sent',
   })
