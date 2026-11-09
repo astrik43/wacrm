@@ -32,8 +32,13 @@ import {
 } from '@/lib/whatsapp/sent-template';
 import { resolveTemplateRow } from '@/lib/whatsapp/template-body';
 
-/** Sends from the release that started storing buttons onwards have them. */
-export const BACKFILL_BEFORE = '2026-10-31T00:00:00Z';
+/**
+ * Sends from the release that started storing buttons onwards have
+ * them. Deliberately after that release went live (31 Oct, evening
+ * IST): messages already carrying buttons are skipped anyway, so a
+ * later cut-off only costs a slightly bigger scan.
+ */
+export const BACKFILL_BEFORE = '2026-11-02T00:00:00Z';
 const BATCH = 50;
 const SCAN = 1000;
 
