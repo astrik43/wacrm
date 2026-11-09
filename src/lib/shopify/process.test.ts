@@ -387,6 +387,31 @@ describe('processShopifyWebhook — fulfillments', () => {
     expect(mocks.notify.mock.calls.map((c) => c[2].event)).toEqual(['delivered']);
   });
 
+  it('tags the customer "Order Delivered" on delivery, and only then', async () => {
+    const transit = freshState({ storedOrder: STORED_ORDER, rpcResult: NEW });
+    await processShopifyWebhook(fakeDb(transit), CONFIG, 'fulfillments/create', FULFILLMENT, null);
+    expect(mocks.applyTags).not.toHaveBeenCalled();
+
+    const delivered = freshState({
+      storedOrder: STORED_ORDER,
+      rpcResult: { ...NEW, was_new: false, prev_tracking_number: 'EX123' },
+    });
+    await processShopifyWebhook(
+      fakeDb(delivered),
+      CONFIG,
+      'fulfillments/update',
+      { ...FULFILLMENT, shipment_status: 'delivered' },
+      null
+    );
+    expect(mocks.applyTags).toHaveBeenCalledWith(
+      expect.anything(),
+      CONFIG.account_id,
+      '919876543210',
+      'Priya Nair',
+      { add: ['Order Delivered'], remove: [] }
+    );
+  });
+
   it('sends nothing for a stale delivery', async () => {
     const state = freshState({
       storedOrder: STORED_ORDER,
@@ -965,7 +990,7 @@ describe('automatic contact tags', () => {
     });
   });
 
-  it('does not tag cancellations or shipment progress', async () => {
+  it('does not tag cancellations or shipment progress before delivery', async () => {
     await processShopifyWebhook(
       fakeDb(freshState()),
       CONFIG,
@@ -982,12 +1007,68 @@ describe('automatic contact tags', () => {
         order_id: 820982911946154500,
         tracking_number: 'EX123',
         tracking_url: 'https://t.example/EX123',
+        shipment_status: 'out_for_delivery',
+        updated_at: '2026-10-12T12:00:00+05:30',
+      },
+      null
+    );
+    expect(mocks.applyTags).not.toHaveBeenCalled();
+  });
+
+  it('does not tag a delivered shipment of a cancelled order', async () => {
+    await processShopifyWebhook(
+      fakeDb(
+        freshState({
+          storedOrder: { ...STORED_ORDER, cancelled_at: '2026-10-12T05:30:00.000Z' },
+          rpcResult: NEW,
+        })
+      ),
+      CONFIG,
+      'fulfillments/update',
+      {
+        id: 255858046,
+        order_id: 820982911946154500,
+        tracking_number: 'EX123',
         shipment_status: 'delivered',
         updated_at: '2026-10-12T12:00:00+05:30',
       },
       null
     );
     expect(mocks.applyTags).not.toHaveBeenCalled();
+  });
+
+  it('tags an RTO shipment "Order RTO", even on a cancelled order, and sends nothing', async () => {
+    await processShopifyWebhook(
+      fakeDb(
+        freshState({
+          storedOrder: { ...STORED_ORDER, cancelled_at: '2026-10-12T05:30:00.000Z' },
+          rpcResult: {
+            ...NEW,
+            was_new: false,
+            prev_tracking_number: 'EX123',
+            prev_shipment_status: 'in_transit',
+          },
+        })
+      ),
+      CONFIG,
+      'fulfillments/update',
+      {
+        id: 255858046,
+        order_id: 820982911946154500,
+        tracking_number: 'EX123',
+        shipment_status: 'failure',
+        updated_at: '2026-10-14T12:00:00+05:30',
+      },
+      null
+    );
+    expect(mocks.applyTags).toHaveBeenCalledWith(
+      expect.anything(),
+      CONFIG.account_id,
+      '919876543210',
+      'Priya Nair',
+      { add: ['Order RTO'], remove: [] }
+    );
+    expect(mocks.notify).not.toHaveBeenCalled();
   });
 
   it('tags an abandoned FlexyPe cart', async () => {

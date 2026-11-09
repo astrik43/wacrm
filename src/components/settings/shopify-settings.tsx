@@ -141,6 +141,15 @@ export function ShopifySettings() {
   } | null>(null);
   const [toggling, setToggling] = useState<string | null>(null);
   const [overdue, setOverdue] = useState(0);
+  const [tagging, setTagging] = useState<{
+    scanned: number;
+    delivered: number;
+    returned: number;
+    noPhone: number;
+    oldestOrderAt: string | null;
+    done: boolean;
+  } | null>(null);
+  const [taggingBusy, setTaggingBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -210,6 +219,57 @@ export function ShopifySettings() {
       return false;
     } finally {
       setSaving(false);
+    }
+  }
+
+  /** Tag customers of past delivered / RTO orders, one page of Shopify orders per call. */
+  async function handleTagDelivered() {
+    setTaggingBusy(true);
+    const progress = {
+      scanned: 0,
+      delivered: 0,
+      returned: 0,
+      noPhone: 0,
+      oldestOrderAt: null as string | null,
+      done: false,
+    };
+    setTagging({ ...progress });
+    let after: string | null = null;
+    try {
+      do {
+        const res: Response = await fetch('/api/shopify/tags/delivered', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ after }),
+        });
+        const payload = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          scanned?: number;
+          delivered?: number;
+          returned?: number;
+          noPhone?: number;
+          oldestOrderAt?: string | null;
+          nextCursor?: string | null;
+        };
+        if (!res.ok) {
+          toast.error(payload.error || t('deliveredTagFailed'));
+          return;
+        }
+        progress.scanned += payload.scanned ?? 0;
+        progress.delivered += payload.delivered ?? 0;
+        progress.returned += payload.returned ?? 0;
+        progress.noPhone += payload.noPhone ?? 0;
+        progress.oldestOrderAt ??= payload.oldestOrderAt ?? null;
+        after = typeof payload.nextCursor === 'string' ? payload.nextCursor : null;
+        progress.done = after === null;
+        setTagging({ ...progress });
+      } while (after);
+      toast.success(t('deliveredTagDone'));
+    } catch (err) {
+      console.error('[ShopifySettings] delivered tags error:', err);
+      toast.error(t('networkError'));
+    } finally {
+      setTaggingBusy(false);
     }
   }
 
@@ -618,6 +678,51 @@ export function ShopifySettings() {
                 </Button>
               )}
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ---- Delivered customers tag ----------------------------- */}
+      {config && canEditSettings && config.has_api_credentials && (
+        <Card>
+          <CardContent className="space-y-3 p-4">
+            <div>
+              <h3 className="text-foreground text-sm font-semibold">
+                {t('deliveredTagTitle')}
+              </h3>
+              <p className="text-muted-foreground mt-1 text-sm">
+                {t('deliveredTagDesc')}
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              disabled={taggingBusy}
+              onClick={handleTagDelivered}
+            >
+              {taggingBusy ? <Loader2 className="size-4 animate-spin" /> : null}
+              {t('deliveredTagButton')}
+            </Button>
+            {tagging && (
+              <div className="text-muted-foreground space-y-1 text-sm">
+                <p>
+                  {t('deliveredTagProgress', {
+                    orders: tagging.scanned,
+                    delivered: tagging.delivered,
+                    returned: tagging.returned,
+                  })}
+                </p>
+                {tagging.noPhone > 0 && (
+                  <p>{t('deliveredTagNoPhone', { count: tagging.noPhone })}</p>
+                )}
+                {tagging.done && tagging.oldestOrderAt && (
+                  <p>
+                    {t('deliveredTagOldest', {
+                      date: fmtDateTime(tagging.oldestOrderAt),
+                    })}
+                  </p>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

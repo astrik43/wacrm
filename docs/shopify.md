@@ -333,10 +333,31 @@ land in the same audiences:
 | **Order Placed(CoD)** | a cash-on-delivery order is placed | never |
 | **Order Placed(Prepaid)** | a prepaid order is placed | never |
 | **Abandoned Cart** | a Shopify, FlexyPe or Shiprocket checkout is abandoned | the customer places an order |
+| **Order Delivered** | Shopify shows a shipment delivered (order not cancelled) | never |
+| **Order RTO** | Shopify shows a shipment not delivered — returned to origin | never |
 
-A customer who ordered both ways has both order tags. Shipment progress
-(shipped, delivered, RTO…) is not tagged: with several orders in flight
-a single tag can't say which order it is about.
+A customer who ordered both ways has both order tags, and one who
+received an order and later sent one back has both **Order Delivered**
+and **Order RTO**. To message real customers, select **Order Delivered**
+in the broadcast audience; add **Order RTO** under *exclude* to leave
+out anyone who has ever returned a parcel. Other shipment progress
+(shipped, out for delivery…) is not tagged: with several orders in
+flight such a tag can't say which order it is about.
+
+### Tagging past orders
+
+Delivered and RTO tags are added as Shopify reports each shipment. For
+orders from before that, use **Settings → Shopify → Delivered and RTO
+customers → Tag customers from past orders**. It reads the store's
+orders from Shopify (needs the app credentials under *Product images &
+order tags*, with `read_orders` or `write_orders`) and tags each
+customer, showing progress as it goes. Running it again only adds what
+is missing, so "tag added" automations never fire twice.
+
+Shopify shows apps only the **last 60 days** of orders unless the app
+also has the `read_all_orders` scope; the card says how far back it
+could see. To reach older orders, add that scope to the app, release a
+new version, and run it again.
 
 A customer who isn't a contact yet is added as one. Tags are created the
 first time they're needed, matched case-insensitively, and are ordinary

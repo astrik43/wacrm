@@ -11,6 +11,12 @@ and polish.
 
 ## [Unreleased]
 
+- **Order Delivered / Order RTO contact tags.** Customers are tagged
+  when Shopify shows their shipment delivered or not delivered
+  (returned), so a broadcast can target customers who actually received
+  an order. Settings → Shopify → *Tag customers from past orders* tags
+  the customers of earlier orders, read from Shopify.
+
 - **Shiprocket Checkout (Fastrr) abandoned carts.** Stores that check
   out through Shiprocket can connect it under Settings → Shiprocket:
   its "Abandon Cart" webhook feeds the same three cart reminders as

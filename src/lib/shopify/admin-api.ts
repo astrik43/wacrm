@@ -305,6 +305,163 @@ export async function fetchLineItemImage(
   }
 }
 
+/** One order as the delivered-customers backfill needs it. */
+export interface OrderDeliverySummary {
+  cancelled: boolean;
+  /** A shipment Shopify shows as delivered. */
+  delivered: boolean;
+  /** A shipment Shopify shows as not delivered (RTO). */
+  returned: boolean;
+  createdAt: string | null;
+  /** Candidates in preference order, raw as Shopify has them. */
+  phones: (string | null)[];
+  name: string | null;
+}
+
+export type OrderPageResult =
+  | {
+      ok: true;
+      orders: OrderDeliverySummary[];
+      nextCursor: string | null;
+    }
+  | { ok: false; error: string };
+
+const ORDERS_PAGE = `query OrdersForDelivery($after: String) {
+  orders(first: 100, after: $after, query: "status:any", sortKey: CREATED_AT) {
+    pageInfo { hasNextPage endCursor }
+    nodes {
+      createdAt
+      cancelledAt
+      phone
+      customer { defaultPhoneNumber { phoneNumber } }
+      shippingAddress { phone name }
+      billingAddress { phone name }
+      fulfillments(first: 10) { displayStatus }
+    }
+  }
+}`;
+
+interface OrderNode {
+  createdAt?: unknown;
+  cancelledAt?: unknown;
+  phone?: unknown;
+  customer?: { defaultPhoneNumber?: { phoneNumber?: unknown } | null } | null;
+  shippingAddress?: { phone?: unknown; name?: unknown } | null;
+  billingAddress?: { phone?: unknown; name?: unknown } | null;
+  fulfillments?: { displayStatus?: unknown }[] | null;
+}
+
+function str(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function summarizeOrder(node: OrderNode): OrderDeliverySummary {
+  const statuses = (node.fulfillments ?? []).map((f) => f?.displayStatus);
+  return {
+    cancelled: Boolean(node.cancelledAt),
+    delivered: statuses.includes('DELIVERED'),
+    returned: statuses.includes('NOT_DELIVERED'),
+    createdAt: str(node.createdAt),
+    phones: [
+      str(node.phone),
+      str(node.customer?.defaultPhoneNumber?.phoneNumber),
+      str(node.shippingAddress?.phone),
+      str(node.billingAddress?.phone),
+    ],
+    name: str(node.shippingAddress?.name) ?? str(node.billingAddress?.name),
+  };
+}
+
+async function queryOrders(
+  shopDomain: string,
+  token: string,
+  after: string | null
+): Promise<{ status: number; result: OrderPageResult }> {
+  const response = await fetch(
+    `https://${shopDomain}/admin/api/${API_VERSION}/graphql.json`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Shopify-Access-Token': token,
+      },
+      body: JSON.stringify({ query: ORDERS_PAGE, variables: { after } }),
+      signal: AbortSignal.timeout(15_000),
+    }
+  );
+  if (!response.ok) {
+    return {
+      status: response.status,
+      result: { ok: false, error: `shopify_http_${response.status}` },
+    };
+  }
+  const body = (await response.json()) as {
+    errors?: { message?: unknown; extensions?: { code?: unknown } }[];
+    data?: {
+      orders?: {
+        pageInfo?: { hasNextPage?: unknown; endCursor?: unknown };
+        nodes?: OrderNode[];
+      } | null;
+    };
+  };
+  const top = body.errors?.[0];
+  if (top) {
+    return {
+      status: 200,
+      result: {
+        ok: false,
+        error:
+          top.extensions?.code === 'ACCESS_DENIED'
+            ? 'missing_read_orders_scope'
+            : typeof top.message === 'string'
+              ? top.message
+              : 'shopify_error',
+      },
+    };
+  }
+  const page = body.data?.orders;
+  const nodes = page?.nodes ?? [];
+  const nextCursor =
+    page?.pageInfo?.hasNextPage === true && typeof page.pageInfo.endCursor === 'string'
+      ? page.pageInfo.endCursor
+      : null;
+  return {
+    status: 200,
+    result: { ok: true, orders: nodes.map(summarizeOrder), nextCursor },
+  };
+}
+
+/**
+ * One page (100, oldest first) of the store's orders with whether each
+ * was delivered or returned, and the phones it carries. Needs the app's
+ * `read_orders` (or `write_orders`) scope; Shopify only shows the last
+ * 60 days unless the app also has `read_all_orders`. Never throws.
+ */
+export async function fetchOrderDeliveryPage(
+  db: SupabaseClient,
+  config: ShopifyConfigRow,
+  after: string | null
+): Promise<OrderPageResult> {
+  if (!hasApiCredentials(config)) return { ok: false, error: 'no_app_credentials' };
+  try {
+    let token = await getShopifyAccessToken(db, config);
+    if (!token) return { ok: false, error: 'no_access_token' };
+    const first = await queryOrders(config.shop_domain!, token, after);
+    let result = first.result;
+    if (first.status === 401) {
+      token = await getShopifyAccessToken(db, config, { forceRefresh: true });
+      if (!token) return { ok: false, error: 'no_access_token' };
+      result = (await queryOrders(config.shop_domain!, token, after)).result;
+    }
+    return result.ok ? result : { ok: false, error: result.error.slice(0, 300) };
+  } catch (err) {
+    return {
+      ok: false,
+      error: (err instanceof Error ? err.message : 'unknown_error').slice(0, 300),
+    };
+  }
+}
+
 const TAGS_ADD = `mutation AddOrderTags($id: ID!, $tags: [String!]!) {
   tagsAdd(id: $id, tags: $tags) { userErrors { message } }
 }`;
