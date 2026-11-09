@@ -62,10 +62,9 @@ export async function POST(request: Request) {
 
     const result = await tagDeliveredCustomersPage(db, config, after);
     if (!result.ok) {
-      const error =
-        result.error === 'missing_read_orders_scope'
-          ? "The Shopify app can't read orders. Give it the read_orders scope, release a new version, and try again."
-          : `Shopify refused: ${result.error}`;
+      // Shopify's own message names what is missing (a scope, or
+      // access to protected customer data).
+      const error = `Shopify refused: ${result.error}`;
       return NextResponse.json({ error }, { status: 502 });
     }
     return NextResponse.json(result);

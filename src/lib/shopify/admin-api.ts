@@ -326,6 +326,9 @@ export type OrderPageResult =
     }
   | { ok: false; error: string };
 
+// No `customer { ... }`: reading the customer record needs the
+// read_customers scope, and the order's own phone and addresses carry
+// the number anyway.
 const ORDERS_PAGE = `query OrdersForDelivery($after: String) {
   orders(first: 100, after: $after, query: "status:any", sortKey: CREATED_AT) {
     pageInfo { hasNextPage endCursor }
@@ -333,7 +336,6 @@ const ORDERS_PAGE = `query OrdersForDelivery($after: String) {
       createdAt
       cancelledAt
       phone
-      customer { defaultPhoneNumber { phoneNumber } }
       shippingAddress { phone name }
       billingAddress { phone name }
       fulfillments(first: 10) { displayStatus }
@@ -345,7 +347,6 @@ interface OrderNode {
   createdAt?: unknown;
   cancelledAt?: unknown;
   phone?: unknown;
-  customer?: { defaultPhoneNumber?: { phoneNumber?: unknown } | null } | null;
   shippingAddress?: { phone?: unknown; name?: unknown } | null;
   billingAddress?: { phone?: unknown; name?: unknown } | null;
   fulfillments?: { displayStatus?: unknown }[] | null;
@@ -364,7 +365,6 @@ function summarizeOrder(node: OrderNode): OrderDeliverySummary {
     createdAt: str(node.createdAt),
     phones: [
       str(node.phone),
-      str(node.customer?.defaultPhoneNumber?.phoneNumber),
       str(node.shippingAddress?.phone),
       str(node.billingAddress?.phone),
     ],
@@ -411,10 +411,10 @@ async function queryOrders(
       result: {
         ok: false,
         error:
-          top.extensions?.code === 'ACCESS_DENIED'
-            ? 'missing_read_orders_scope'
-            : typeof top.message === 'string'
-              ? top.message
+          typeof top.message === 'string' && top.message
+            ? top.message
+            : top.extensions?.code === 'ACCESS_DENIED'
+              ? 'access_denied'
               : 'shopify_error',
       },
     };
