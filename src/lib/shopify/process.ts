@@ -52,7 +52,9 @@ import { notifyShopifyEvent, type NotifyOutcome } from './notify';
 import {
   abandonedCartTags,
   applyAutoTags,
+  orderDeliveredTags,
   orderPlacedTags,
+  orderRtoTags,
 } from './auto-tags';
 import { makeLinkCode } from './link-codes';
 import { pickOrderPhone } from './phone';
@@ -570,7 +572,12 @@ async function handleFulfillment(
         shipmentStatus: result.prev_shipment_status,
       };
   const events = deriveFulfillmentEvents(prev, next);
-  if (events.length === 0) {
+  // Shopify's "Not delivered": the parcel is going back (RTO). No
+  // message, but the customer is tagged — cancelled order or not, since
+  // a returned COD order is usually cancelled afterwards.
+  const returned =
+    next.shipmentStatus === 'failure' && prev?.shipmentStatus !== 'failure';
+  if (events.length === 0 && !returned) {
     return { orderRef: fallbackRef, note: 'no_change', outcomes: [] };
   }
 
@@ -579,6 +586,26 @@ async function handleFulfillment(
     // fulfillments/create can beat orders/create by a moment.
     await new Promise((resolve) => setTimeout(resolve, ORDER_WAIT_MS));
     order = await loadOrder(db, accountId, orderId);
+  }
+  const destination = obj(fulfillment.destination);
+  const phone =
+    order?.phone ??
+    pickOrderPhone([text(destination?.phone)], config.default_country_code);
+  if (returned) {
+    await applyAutoTags(
+      db,
+      accountId,
+      phone,
+      order?.customer_name ?? fulfillmentFields.customer_name ?? null,
+      orderRtoTags()
+    );
+  }
+  if (events.length === 0) {
+    return {
+      orderRef: order?.order_name ?? fallbackRef,
+      note: 'no_change',
+      outcomes: [],
+    };
   }
   if (order?.cancelled_at) {
     return {
@@ -599,10 +626,6 @@ async function handleFulfillment(
     if (imageUrl) fulfillmentFields.product_image_url = imageUrl;
   }
 
-  const destination = obj(fulfillment.destination);
-  const phone =
-    order?.phone ??
-    pickOrderPhone([text(destination?.phone)], config.default_country_code);
   // Order values win; the fulfillment's own name/number only fill gaps
   // for orders placed before the store was connected.
   const trackingLink = makeLinkCode('t', accountId, fulfillmentId);
@@ -621,6 +644,12 @@ async function handleFulfillment(
   const paymentMode: PaymentMode | null = isPaymentMode(order?.payment_mode)
     ? order.payment_mode
     : null;
+
+  // Whether or not a "delivered" message is set up, they are now a
+  // customer who received an order.
+  if (events.includes('delivered')) {
+    await applyAutoTags(db, accountId, phone, customerName, orderDeliveredTags());
+  }
 
   const outcomes: ProcessOutcome[] = [];
   for (const event of events) {

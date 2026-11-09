@@ -11,6 +11,7 @@ import {
   canReadProducts,
   canWriteOrders,
   fetchLineItemImage,
+  fetchOrderDeliveryPage,
   getShopifyAccessToken,
   isMyshopifyDomain,
   requestAccessToken,
@@ -361,6 +362,99 @@ describe('addOrderTags', () => {
     });
     expect(
       await addOrderTags(db, config({ api_client_id: null }), '1', ['x'])
+    ).toEqual({ ok: false, error: 'no_app_credentials' });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('fetchOrderDeliveryPage', () => {
+  function page(nodes: unknown[], next: string | null) {
+    return json({
+      data: {
+        orders: {
+          pageInfo: { hasNextPage: next !== null, endCursor: next },
+          nodes,
+        },
+      },
+    });
+  }
+
+  it('summarises each order: delivered, returned, cancelled, phones, name', async () => {
+    fetchMock.mockResolvedValue(
+      page(
+        [
+          {
+            createdAt: '2026-09-10T19:48:30Z',
+            cancelledAt: null,
+            phone: null,
+            customer: { defaultPhoneNumber: { phoneNumber: '+919876543210' } },
+            shippingAddress: { phone: '9876543210', name: 'Priya Nair' },
+            billingAddress: null,
+            fulfillments: [{ displayStatus: 'IN_TRANSIT' }, { displayStatus: 'DELIVERED' }],
+          },
+          {
+            createdAt: '2026-09-11T10:00:00Z',
+            cancelledAt: '2026-09-12T10:00:00Z',
+            phone: '9000000001',
+            customer: null,
+            shippingAddress: null,
+            billingAddress: { phone: null, name: 'Ravi K' },
+            fulfillments: [{ displayStatus: 'NOT_DELIVERED' }],
+          },
+        ],
+        'cursor-2'
+      )
+    );
+
+    expect(await fetchOrderDeliveryPage(db, config(), 'cursor-1')).toEqual({
+      ok: true,
+      nextCursor: 'cursor-2',
+      orders: [
+        {
+          cancelled: false,
+          delivered: true,
+          returned: false,
+          createdAt: '2026-09-10T19:48:30Z',
+          phones: [null, '+919876543210', '9876543210', null],
+          name: 'Priya Nair',
+        },
+        {
+          cancelled: true,
+          delivered: false,
+          returned: true,
+          createdAt: '2026-09-11T10:00:00Z',
+          phones: ['9000000001', null, null, null],
+          name: 'Ravi K',
+        },
+      ],
+    });
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.query).toContain('orders(first: 100');
+    expect(body.variables).toEqual({ after: 'cursor-1' });
+  });
+
+  it('has no next cursor on the last page', async () => {
+    fetchMock.mockResolvedValue(page([], null));
+    expect(await fetchOrderDeliveryPage(db, config(), null)).toEqual({
+      ok: true,
+      orders: [],
+      nextCursor: null,
+    });
+  });
+
+  it('names a missing read_orders scope', async () => {
+    fetchMock.mockResolvedValue(
+      json({ errors: [{ message: 'Access denied', extensions: { code: 'ACCESS_DENIED' } }] })
+    );
+    expect(await fetchOrderDeliveryPage(db, config(), null)).toEqual({
+      ok: false,
+      error: 'missing_read_orders_scope',
+    });
+  });
+
+  it('needs app credentials', async () => {
+    expect(
+      await fetchOrderDeliveryPage(db, config({ api_client_id: null }), null)
     ).toEqual({ ok: false, error: 'no_app_credentials' });
     expect(fetchMock).not.toHaveBeenCalled();
   });

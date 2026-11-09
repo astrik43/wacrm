@@ -10,9 +10,20 @@
 //   Abandoned Cart
 //     added when a cart is abandoned, removed when the customer places
 //     an order.
+//   Order Delivered
+//     added when Shopify reports a shipment delivered, never removed —
+//     the customers who actually received an order (a COD parcel that
+//     came back never gets it). Past orders are tagged from Shopify by
+//     delivered-backfill.ts.
+//   Order RTO
+//     added when Shopify reports a shipment not delivered (returned to
+//     origin), never removed. A customer can have both: a broadcast to
+//     real customers selects "Order Delivered" and excludes "Order RTO"
+//     when it wants only customers who never sent a parcel back.
 //
-// Shipment progress is deliberately not tagged: with several orders in
-// flight a single status tag can't say which order it is about.
+// Other shipment progress is deliberately not tagged: with several
+// orders in flight a single status tag can't say which order it is
+// about. "Delivered" can: it only ever says "has received something".
 //
 // Tags are ordinary account tags (created on first use, matched
 // case-insensitively), added through the same path as a manual tag, so
@@ -38,6 +49,10 @@ export const ORDER_PLACED_TAGS: Record<PaymentMode, string> = {
 
 export const ABANDONED_CART_TAG = 'Abandoned Cart';
 
+export const ORDER_DELIVERED_TAG = 'Order Delivered';
+
+export const ORDER_RTO_TAG = 'Order RTO';
+
 export interface TagChange {
   add: string[];
   remove: string[];
@@ -54,6 +69,16 @@ export function orderPlacedTags(paymentMode: PaymentMode): TagChange {
 /** Tags for an abandoned checkout. */
 export function abandonedCartTags(): TagChange {
   return { add: [ABANDONED_CART_TAG], remove: [] };
+}
+
+/** Tags for a delivered shipment. */
+export function orderDeliveredTags(): TagChange {
+  return { add: [ORDER_DELIVERED_TAG], remove: [] };
+}
+
+/** Tags for a shipment that was not delivered (RTO). */
+export function orderRtoTags(): TagChange {
+  return { add: [ORDER_RTO_TAG], remove: [] };
 }
 
 /**
