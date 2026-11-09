@@ -387,7 +387,6 @@ describe('fetchOrderDeliveryPage', () => {
             createdAt: '2026-09-10T19:48:30Z',
             cancelledAt: null,
             phone: null,
-            customer: { defaultPhoneNumber: { phoneNumber: '+919876543210' } },
             shippingAddress: { phone: '9876543210', name: 'Priya Nair' },
             billingAddress: null,
             fulfillments: [{ displayStatus: 'IN_TRANSIT' }, { displayStatus: 'DELIVERED' }],
@@ -396,7 +395,6 @@ describe('fetchOrderDeliveryPage', () => {
             createdAt: '2026-09-11T10:00:00Z',
             cancelledAt: '2026-09-12T10:00:00Z',
             phone: '9000000001',
-            customer: null,
             shippingAddress: null,
             billingAddress: { phone: null, name: 'Ravi K' },
             fulfillments: [{ displayStatus: 'NOT_DELIVERED' }],
@@ -415,7 +413,7 @@ describe('fetchOrderDeliveryPage', () => {
           delivered: true,
           returned: false,
           createdAt: '2026-09-10T19:48:30Z',
-          phones: [null, '+919876543210', '9876543210', null],
+          phones: [null, '9876543210', null],
           name: 'Priya Nair',
         },
         {
@@ -423,7 +421,7 @@ describe('fetchOrderDeliveryPage', () => {
           delivered: false,
           returned: true,
           createdAt: '2026-09-11T10:00:00Z',
-          phones: ['9000000001', null, null, null],
+          phones: ['9000000001', null, null],
           name: 'Ravi K',
         },
       ],
@@ -442,14 +440,18 @@ describe('fetchOrderDeliveryPage', () => {
     });
   });
 
-  it('names a missing read_orders scope', async () => {
+  it("passes Shopify's reason on, and does not ask for the customer record", async () => {
+    const message =
+      'Access denied for customer field. Required access: `read_customers` access scope.';
     fetchMock.mockResolvedValue(
-      json({ errors: [{ message: 'Access denied', extensions: { code: 'ACCESS_DENIED' } }] })
+      json({ errors: [{ message, extensions: { code: 'ACCESS_DENIED' } }] })
     );
     expect(await fetchOrderDeliveryPage(db, config(), null)).toEqual({
       ok: false,
-      error: 'missing_read_orders_scope',
+      error: message,
     });
+    // The customer record needs read_customers, which the app doesn't have.
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).query).not.toContain('customer');
   });
 
   it('needs app credentials', async () => {

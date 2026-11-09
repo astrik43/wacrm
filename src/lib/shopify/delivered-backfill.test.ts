@@ -34,7 +34,7 @@ function order(over: Partial<{
     delivered: true,
     returned: false,
     createdAt: '2026-09-10T19:48:30Z',
-    phones: [null, '9876543210', null, null],
+    phones: [null, '9876543210', null],
     name: 'Priya Nair',
     ...over,
   };
@@ -53,11 +53,11 @@ describe('tagDeliveredCustomersPage', () => {
       orders: [
         order({}),
         // Same customer again, number spelled differently.
-        order({ phones: ['+91 98765 43210', null, null, null], name: null }),
+        order({ phones: ['+91 98765 43210', null, null], name: null }),
         order({ delivered: false, phones: ['9000000001'] }),
         order({ cancelled: true, phones: ['9000000002'] }),
-        order({ phones: [null, null, null, null] }),
-        order({ phones: [null, null, '9123456780', null], name: 'Ravi K' }),
+        order({ phones: [null, null, null] }),
+        order({ phones: [null, '9123456780', null], name: 'Ravi K' }),
       ],
     });
 
@@ -132,9 +132,9 @@ describe('tagDeliveredCustomersPage', () => {
   });
 
   it('passes a Shopify error through without tagging', async () => {
-    mocks.fetchPage.mockResolvedValue({ ok: false, error: 'missing_read_orders_scope' });
+    mocks.fetchPage.mockResolvedValue({ ok: false, error: 'Access denied' });
     const result = await tagDeliveredCustomersPage(db, CONFIG, null);
-    expect(result).toEqual({ ok: false, error: 'missing_read_orders_scope' });
+    expect(result).toEqual({ ok: false, error: 'Access denied' });
     expect(mocks.applyTags).not.toHaveBeenCalled();
   });
 });
