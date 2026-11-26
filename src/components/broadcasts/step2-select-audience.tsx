@@ -18,6 +18,7 @@ import {
   X,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { fetchStaffContactIds } from '@/lib/broadcasts/staff';
 
 type AudienceType = 'all' | 'tags' | 'custom_field' | 'csv';
 type CustomFieldOperator = 'is' | 'is_not' | 'contains';
@@ -199,15 +200,18 @@ export function Step2SelectAudience({
       }
 
       if (baseIds) {
+        // Staff contacts are never broadcast to, so they are not reach.
+        const staffIds = await fetchStaffContactIds(supabase);
         const effective = [...baseIds].filter(
-          (id) => !excludeSet?.has(id),
+          (id) => !excludeSet?.has(id) && !staffIds.has(id),
         );
         setEstimatedCount(effective.length);
       } else {
         // "All" — fetch the total, then subtract exclude set if any.
         const { count } = await supabase
           .from('contacts')
-          .select('*', { count: 'exact', head: true });
+          .select('*', { count: 'exact', head: true })
+          .eq('is_staff', false);
         const total = count ?? 0;
         setEstimatedCount(excludeSet ? Math.max(0, total - excludeSet.size) : total);
       }

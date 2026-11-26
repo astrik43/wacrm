@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { ArrowLeft, Send, Loader2, Users, Save } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { fetchStaffContactIds } from '@/lib/broadcasts/staff';
 import type { ButtonVariables, VariableMapping } from '@/hooks/use-broadcast-sending';
 import { SendTestDialog } from './send-test-dialog';
 
@@ -67,7 +68,8 @@ export function Step4ScheduleSend({
         if (audience.type === 'all') {
           const { count } = await supabase
             .from('contacts')
-            .select('*', { count: 'exact', head: true });
+            .select('*', { count: 'exact', head: true })
+            .eq('is_staff', false);
           setEstimatedReach(count ?? 0);
         } else if (audience.type === 'tags' && audience.tagIds && audience.tagIds.length > 0) {
           const { data: contactTags } = await supabase
@@ -75,7 +77,12 @@ export function Step4ScheduleSend({
             .select('contact_id')
             .in('tag_id', audience.tagIds);
 
-          const uniqueIds = new Set((contactTags ?? []).map((ct) => ct.contact_id));
+          const staffIds = await fetchStaffContactIds(supabase);
+          const uniqueIds = new Set(
+            (contactTags ?? [])
+              .map((ct) => ct.contact_id)
+              .filter((id) => !staffIds.has(id)),
+          );
           setEstimatedReach(uniqueIds.size);
         } else if (audience.type === 'csv' && audience.csvContacts) {
           setEstimatedReach(audience.csvContacts.length);
