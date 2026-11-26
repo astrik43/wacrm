@@ -805,6 +805,30 @@
         "loadingFields": "Cargando…",
         "noCustomFields": "Sin campos personalizados",
         "unmappedWarning": "Asigna todas las variables antes de continuar; aún faltan <mono>{keys}</mono>. De lo contrario, esas variables se enviarán a Meta como cadenas vacías.",
+        "headerMedia": {
+          "image": {
+            "title": "Imagen del encabezado",
+            "url": "URL de la imagen",
+            "placeholder": "https://example.com/image.jpg",
+            "desc": "Esta plantilla requiere una imagen de encabezado."
+          },
+          "video": {
+            "title": "Video del encabezado",
+            "url": "URL del video",
+            "placeholder": "https://example.com/video.mp4",
+            "desc": "Esta plantilla requiere un video de encabezado (MP4, hasta 16 MB)."
+          },
+          "document": {
+            "title": "Documento del encabezado",
+            "url": "URL del documento",
+            "placeholder": "https://example.com/file.pdf",
+            "desc": "Esta plantilla requiere un documento de encabezado."
+          }
+        },
+        "openDocument": "Abrir documento",
+        "buttonParam": "Parámetro del botón: {button}",
+        "couponCode": "Código de cupón: {button}",
+        "buttonParamMissing": "El botón \"{button}\" necesita un valor para continuar.",
         "fieldMap": {
           "name": "Nombre",
           "phone": "Teléfono",

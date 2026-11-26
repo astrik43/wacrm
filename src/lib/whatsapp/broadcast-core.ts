@@ -27,6 +27,7 @@ import {
   isRecipientNotAllowedError,
 } from '@/lib/whatsapp/phone-utils';
 import { resolveTemplateRow } from '@/lib/whatsapp/template-body';
+import type { SendTimeParams } from '@/lib/whatsapp/template-send-builder';
 import type { MessageTemplate } from '@/types';
 import { findOrCreateContact } from '@/lib/api/v1/contacts';
 
@@ -60,6 +61,8 @@ interface PlannedRecipient {
   recipientRowId: string;
   phone: string;
   params: string[];
+  /** Button / header values a dashboard broadcast froze on the row. */
+  messageParams?: SendTimeParams;
 }
 
 export interface BroadcastPlan {
@@ -274,6 +277,7 @@ export async function deliverBroadcast(
           language: plan.templateLanguage,
           template: plan.templateRow ?? undefined,
           params: recipient.params,
+          messageParams: recipient.messageParams,
         });
         sentMessageId = result.messageId;
         lastError = null;

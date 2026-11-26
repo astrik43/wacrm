@@ -811,6 +811,30 @@
         "loadingFields": "Loading…",
         "noCustomFields": "No custom fields",
         "unmappedWarning": "Map every placeholder before continuing — still missing <mono>{keys}</mono>. Otherwise those placeholders will ship to Meta as empty strings.",
+        "headerMedia": {
+          "image": {
+            "title": "Header Image",
+            "url": "Image URL",
+            "placeholder": "https://example.com/image.jpg",
+            "desc": "This template requires a header image."
+          },
+          "video": {
+            "title": "Header Video",
+            "url": "Video URL",
+            "placeholder": "https://example.com/video.mp4",
+            "desc": "This template requires a header video (MP4, up to 16 MB)."
+          },
+          "document": {
+            "title": "Header Document",
+            "url": "Document URL",
+            "placeholder": "https://example.com/file.pdf",
+            "desc": "This template requires a header document."
+          }
+        },
+        "openDocument": "Open document",
+        "buttonParam": "Button parameter: {button}",
+        "couponCode": "Coupon code: {button}",
+        "buttonParamMissing": "The \"{button}\" button needs a value before continuing.",
         "fieldMap": {
           "name": "Name",
           "phone": "Phone",

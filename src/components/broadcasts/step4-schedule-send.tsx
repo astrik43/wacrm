@@ -17,7 +17,11 @@ import {
 import { ArrowLeft, Send, Loader2, Users, Save, FlaskConical } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { sendTestMessage, type VariableMapping } from '@/hooks/use-broadcast-sending';
+import {
+  sendTestMessage,
+  type ButtonVariables,
+  type VariableMapping,
+} from '@/hooks/use-broadcast-sending';
 
 /** The last number a test went to, remembered on this device. */
 const TEST_PHONE_KEY = 'broadcast-test-phone';
@@ -34,6 +38,7 @@ interface Step4Props {
   template: MessageTemplate;
   audience: AudienceConfig;
   variables: Record<string, VariableMapping>;
+  buttonVariables: ButtonVariables;
   headerMediaUrl: string;
   onSend: () => void;
   onSaveDraft?: () => void;
@@ -48,6 +53,7 @@ export function Step4ScheduleSend({
   template,
   audience,
   variables,
+  buttonVariables,
   headerMediaUrl,
   onSend,
   onSaveDraft,
@@ -76,7 +82,13 @@ export function Step4ScheduleSend({
     if (!phone) return;
     setTestSending(true);
     try {
-      const result = await sendTestMessage({ template, variables, headerMediaUrl, phone });
+      const result = await sendTestMessage({
+        template,
+        variables,
+        buttonVariables,
+        headerMediaUrl,
+        phone,
+      });
       if (!result.ok) {
         toast.error(t('scheduleSend.testFailed', { error: result.error }));
         return;

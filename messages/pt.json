@@ -805,6 +805,30 @@
         "loadingFields": "Carregando…",
         "noCustomFields": "Nenhum campo personalizado",
         "unmappedWarning": "Associe todas as variáveis antes de continuar — ainda faltam <mono>{keys}</mono>. Caso contrário, essas variáveis serão enviadas à Meta como strings vazias.",
+        "headerMedia": {
+          "image": {
+            "title": "Imagem do cabeçalho",
+            "url": "URL da imagem",
+            "placeholder": "https://example.com/image.jpg",
+            "desc": "Este modelo exige uma imagem no cabeçalho."
+          },
+          "video": {
+            "title": "Vídeo do cabeçalho",
+            "url": "URL do vídeo",
+            "placeholder": "https://example.com/video.mp4",
+            "desc": "Este modelo exige um vídeo no cabeçalho (MP4, até 16 MB)."
+          },
+          "document": {
+            "title": "Documento do cabeçalho",
+            "url": "URL do documento",
+            "placeholder": "https://example.com/file.pdf",
+            "desc": "Este modelo exige um documento no cabeçalho."
+          }
+        },
+        "openDocument": "Abrir documento",
+        "buttonParam": "Parâmetro do botão: {button}",
+        "couponCode": "Código do cupom: {button}",
+        "buttonParamMissing": "O botão \"{button}\" precisa de um valor para continuar.",
         "fieldMap": {
           "name": "Nome",
           "phone": "Telefone",

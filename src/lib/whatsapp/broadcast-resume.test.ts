@@ -277,6 +277,37 @@ describe('planBroadcastResume', () => {
     expect(plan.planned.map((p) => p.params)).toEqual([[], []]);
   });
 
+  it('carries frozen button values and the header link into the plan', async () => {
+    const { plan } = await planBroadcastResume(
+      planDb({
+        broadcast: BROADCAST,
+        config: CONFIG,
+        recipients: [
+          recipient('r1', '+919876543210', {
+            body: ['Priya'],
+            buttonParams: { '0': 'family-offer' },
+            headerMediaUrl: 'https://cdn.example.com/offer.mp4',
+          }),
+        ],
+      }),
+      'acct-1',
+      'bc-1',
+      'pending',
+    );
+    expect(plan.planned).toEqual([
+      {
+        recipientRowId: 'r1',
+        phone: '919876543210',
+        params: ['Priya'],
+        messageParams: {
+          body: ['Priya'],
+          buttonParams: { 0: 'family-offer' },
+          headerMediaUrl: 'https://cdn.example.com/offer.mp4',
+        },
+      },
+    ]);
+  });
+
   it('fails unsendable rows up front so they stop blocking the status', async () => {
     const writes: PlanWrites = {};
     const { plan, unsendable } = await planBroadcastResume(

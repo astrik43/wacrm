@@ -275,3 +275,32 @@ describe('buildSendComponents — end-to-end mix', () => {
     expect((components[2] as { index: string }).index).toBe('1');
   });
 });
+
+describe('buildSendComponents — URL + COPY_CODE together', () => {
+  it('indexes each button by its position among all buttons', () => {
+    const components = buildSendComponents(
+      row({
+        buttons: [
+          { type: 'QUICK_REPLY', text: 'Stop' },
+          { type: 'COPY_CODE', text: 'Copy code', example: 'ESTELLE100' },
+          { type: 'URL', text: 'Shop Now', url: 'https://estelleluxe.in/{{1}}' },
+        ],
+      }),
+      { buttonParams: { 2: 'family-offer' } },
+    );
+    expect(components).toEqual([
+      {
+        type: 'button',
+        sub_type: 'copy_code',
+        index: '1',
+        parameters: [{ type: 'coupon_code', coupon_code: 'ESTELLE100' }],
+      },
+      {
+        type: 'button',
+        sub_type: 'url',
+        index: '2',
+        parameters: [{ type: 'text', text: 'family-offer' }],
+      },
+    ]);
+  });
+});

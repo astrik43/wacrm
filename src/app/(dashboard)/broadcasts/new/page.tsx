@@ -10,7 +10,10 @@ import { Step1ChooseTemplate } from '@/components/broadcasts/step1-choose-templa
 import { Step2SelectAudience } from '@/components/broadcasts/step2-select-audience';
 import { Step3Personalize } from '@/components/broadcasts/step3-personalize';
 import { Step4ScheduleSend } from '@/components/broadcasts/step4-schedule-send';
-import { useBroadcastSending } from '@/hooks/use-broadcast-sending';
+import {
+  useBroadcastSending,
+  type ButtonVariables,
+} from '@/hooks/use-broadcast-sending';
 import { Check } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
@@ -43,6 +46,7 @@ export default function NewBroadcastPage() {
   const [variables, setVariables] = useState<
     Record<string, { type: 'static' | 'field' | 'custom_field'; value: string }>
   >({});
+  const [buttonVariables, setButtonVariables] = useState<ButtonVariables>({});
   const [headerMediaUrl, setHeaderMediaUrl] = useState('');
   const [name, setName] = useState('');
 
@@ -61,6 +65,7 @@ export default function NewBroadcastPage() {
           excludeTagIds: audience.excludeTagIds,
         },
         variables,
+        buttonVariables,
         headerMediaUrl,
       });
       router.push(`/broadcasts/${broadcastId}`);
@@ -191,7 +196,10 @@ export default function NewBroadcastPage() {
           {currentStep === 0 && (
             <Step1ChooseTemplate
               selectedTemplate={template}
-              onSelect={setTemplate}
+              onSelect={(next) => {
+                if (next.id !== template?.id) setButtonVariables({});
+                setTemplate(next);
+              }}
               onNext={() => setCurrentStep(1)}
               onBack={() => router.push('/broadcasts')}
             />
@@ -209,6 +217,8 @@ export default function NewBroadcastPage() {
               template={template}
               variables={variables}
               onUpdate={setVariables}
+              buttonVariables={buttonVariables}
+              onButtonVariablesChange={setButtonVariables}
               headerMediaUrl={headerMediaUrl}
               onHeaderMediaUrlChange={setHeaderMediaUrl}
               onNext={() => setCurrentStep(3)}
@@ -222,6 +232,7 @@ export default function NewBroadcastPage() {
               template={template}
               audience={audience}
               variables={variables}
+              buttonVariables={buttonVariables}
               headerMediaUrl={headerMediaUrl}
               onSend={handleSend}
               onSaveDraft={handleSaveDraft}
