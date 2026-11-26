@@ -40,6 +40,8 @@ import {
 import { addContactTagAndDispatch } from '@/lib/contacts/tag-events';
 import { resolveImportTagIds } from '@/lib/contacts/resolve-import-tags';
 
+import { isStaffPhone } from '@/lib/ops/staff';
+
 import type { PaymentMode } from './events';
 
 export const ORDER_PLACED_TAGS: Record<PaymentMode, string> = {
@@ -52,6 +54,10 @@ export const ABANDONED_CART_TAG = 'Abandoned Cart';
 export const ORDER_DELIVERED_TAG = 'Order Delivered';
 
 export const ORDER_RTO_TAG = 'Order RTO';
+
+/** Added when a customer answers the NDR message (src/lib/ops/ndr.ts). */
+export const NDR_REATTEMPT_TAG = 'NDR: reattempt';
+export const NDR_RESCHEDULE_TAG = 'NDR: reschedule';
 
 export interface TagChange {
   add: string[];
@@ -95,6 +101,9 @@ export async function applyAutoTags(
   if (!phone || (change.add.length === 0 && change.remove.length === 0)) {
     return;
   }
+  // Order Placed / Delivered / RTO / Abandoned Cart are customer tags:
+  // a team member never gets them (and is not created as a contact here).
+  if (await isStaffPhone(db, accountId, phone)) return;
   try {
     const auditUserId = await resolveAuditUserId(db, accountId);
     const contact = await findOrCreateContact(db, accountId, auditUserId, {
