@@ -1,6 +1,6 @@
 # wacrm plugin for Claude
 
-The wacrm MCP server (146 tools) plus 14 skills that encode how to use it safely.
+The wacrm MCP server (147 tools) plus 14 skills that encode how to use it safely.
 
 ## Install (Claude Code)
 1. In wacrm: **Settings → API keys → New API key**. Grant only the scopes the skills you'll use need (below). The key is shown once.

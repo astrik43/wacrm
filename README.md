@@ -51,9 +51,12 @@ clone or fork it to run your own CRM.
   build your own automations on top of your CRM. See
   [docs/public-api.md](./docs/public-api.md).
 - **MCP server** — drive your CRM from Claude, Cursor, and other AI
-  assistants over the [Model Context Protocol](https://modelcontextprotocol.io).
-  Read-only by default, opt-in writes. See [docs/mcp.md](./docs/mcp.md)
-  (server in [`mcp-server/`](./mcp-server)).
+  assistants over the [Model Context Protocol](https://modelcontextprotocol.io):
+  147 tools at `/api/mcp`, scoped by API key, with `confirm`, `dry_run`,
+  idempotency and an audit log, plus a Claude plugin of workflow skills.
+  See [docs/mcp.md](./docs/mcp.md) and the
+  [tool reference](./docs/mcp-tools.md). The older 12-tool stdio program
+  is in [`mcp-server/`](./mcp-server).
 
 ## Why fork this?
 
