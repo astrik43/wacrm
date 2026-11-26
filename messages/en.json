@@ -675,6 +675,7 @@
     "detail": {
       "backToBroadcasts": "Back to Broadcasts",
       "notFound": "Broadcast not found",
+      "testTemplateMissing": "The template for this broadcast no longer exists, so it can't be test-sent.",
       "template": "Template: {name}",
       "createdAt": "Created {date}",
       "deletePrompt": "Delete this broadcast?",

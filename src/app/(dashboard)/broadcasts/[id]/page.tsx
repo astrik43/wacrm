@@ -3,7 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { Broadcast, BroadcastRecipient, RecipientStatus } from '@/types';
+import { Broadcast, BroadcastRecipient, MessageTemplate, RecipientStatus } from '@/types';
+import { SendTestDialog } from '@/components/broadcasts/send-test-dialog';
+import { fromStoredTemplateVariables } from '@/lib/broadcast-template-variables';
+import { resolveTemplateRow } from '@/lib/whatsapp/template-body';
 import { Button } from '@/components/ui/button';
 import {
   Table,
@@ -160,6 +163,10 @@ export default function BroadcastDetailPage() {
   );
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  // The broadcast's template, for "Send test". Null while loading and
+  // when the template has since been deleted.
+  const [template, setTemplate] = useState<MessageTemplate | null>(null);
+  const [templateLoaded, setTemplateLoaded] = useState(false);
   const [resumingScope, setResumingScope] = useState<
     'pending' | 'failed' | null
   >(null);
@@ -195,6 +202,24 @@ export default function BroadcastDetailPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  const accountId = broadcast?.account_id;
+  const templateName = broadcast?.template_name;
+  const templateLanguage = broadcast?.template_language;
+  useEffect(() => {
+    if (!accountId || !templateName) return;
+    let cancelled = false;
+    resolveTemplateRow(createClient(), accountId, templateName, templateLanguage)
+      .then((resolved) => {
+        if (!cancelled) setTemplate(resolved.row);
+      })
+      .finally(() => {
+        if (!cancelled) setTemplateLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accountId, templateName, templateLanguage]);
 
   const filteredRecipients = useMemo(
     () =>
@@ -365,48 +390,59 @@ export default function BroadcastDetailPage() {
           </div>
         </div>
 
-        {/* Delete — inline-confirm pattern matches the pipeline-settings
-            "Delete Pipeline" flow. Mid-send broadcasts can't be deleted
-            because orphaning in-flight Meta messages would leave the
-            funnel inconsistent. */}
-        {confirmDelete ? (
-          <div className="flex items-center gap-2 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-sm">
-            <span className="text-red-300">{t('deletePrompt')}</span>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Test with the saved values — works for drafts and for
+              broadcasts that already went out. */}
+          <SendTestDialog
+            template={template}
+            {...fromStoredTemplateVariables(broadcast.template_variables)}
+            title={templateLoaded && !template ? t('testTemplateMissing') : undefined}
+            size="sm"
+          />
+
+          {/* Delete — inline-confirm pattern matches the pipeline-settings
+              "Delete Pipeline" flow. Mid-send broadcasts can't be deleted
+              because orphaning in-flight Meta messages would leave the
+              funnel inconsistent. */}
+          {confirmDelete ? (
+            <div className="flex items-center gap-2 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-sm">
+              <span className="text-red-300">{t('deletePrompt')}</span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setConfirmDelete(false)}
+                disabled={deleting}
+                className="h-7 border-border bg-transparent text-muted-foreground hover:bg-muted"
+              >
+                {t('cancel')}
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleDelete}
+                disabled={deleting}
+                className="h-7 bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {deleting ? t('deleting') : t('confirm')}
+              </Button>
+            </div>
+          ) : (
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setConfirmDelete(false)}
-              disabled={deleting}
-              className="h-7 border-border bg-transparent text-muted-foreground hover:bg-muted"
+              disabled={broadcast.status === 'sending'}
+              onClick={() => setConfirmDelete(true)}
+              title={
+                broadcast.status === 'sending'
+                  ? t('cannotDeleteSending')
+                  : t('deleteHover')
+              }
+              className="border-red-500/30 bg-transparent text-red-400 hover:bg-red-500/10 disabled:opacity-40"
             >
-              {t('cancel')}
+              <Trash2 className="h-3.5 w-3.5" />
+              {t('delete')}
             </Button>
-            <Button
-              size="sm"
-              onClick={handleDelete}
-              disabled={deleting}
-              className="h-7 bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
-            >
-              {deleting ? t('deleting') : t('confirm')}
-            </Button>
-          </div>
-        ) : (
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={broadcast.status === 'sending'}
-            onClick={() => setConfirmDelete(true)}
-            title={
-              broadcast.status === 'sending'
-                ? t('cannotDeleteSending')
-                : t('deleteHover')
-            }
-            className="border-red-500/30 bg-transparent text-red-400 hover:bg-red-500/10 disabled:opacity-40"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            {t('delete')}
-          </Button>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Resume / retry (issue #472). Only rendered when there is

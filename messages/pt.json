@@ -669,6 +669,7 @@
     "detail": {
       "backToBroadcasts": "Voltar aos disparos",
       "notFound": "Disparo não encontrado",
+      "testTemplateMissing": "O modelo desta transmissão não existe mais, então não é possível enviar um teste.",
       "template": "Modelo: {name}",
       "createdAt": "Criado em {date}",
       "deletePrompt": "Excluir este disparo?",
