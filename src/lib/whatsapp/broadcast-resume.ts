@@ -21,6 +21,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { BroadcastError, type BroadcastPlan } from '@/lib/whatsapp/broadcast-core';
 import { decrypt } from '@/lib/whatsapp/encryption';
 import { resolveTemplateRow } from '@/lib/whatsapp/template-body';
+import { parseRecipientParams } from '@/lib/whatsapp/recipient-params';
 import { sanitizePhoneForMeta, isValidE164 } from '@/lib/whatsapp/phone-utils';
 
 /** Which recipients a resume pass picks up. */
@@ -242,9 +243,7 @@ export async function planBroadcastResume(
     planned: slice.map((row) => ({
       recipientRowId: row.id,
       phone: sanitizePhoneForMeta(contactPhone(row) ?? ''),
-      params: Array.isArray(row.template_params)
-        ? row.template_params.filter((p): p is string => typeof p === 'string')
-        : [],
+      ...parseRecipientParams(row.template_params),
     })),
     rejected: 0,
   };

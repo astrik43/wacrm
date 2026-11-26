@@ -8,6 +8,11 @@ import {
   batchRetryDelayMs,
 } from '@/lib/broadcast-retry';
 import { normalizeKey } from '@/lib/contacts/dedupe';
+import {
+  parseRecipientParams,
+  toStoredRecipientParams,
+} from '@/lib/whatsapp/recipient-params';
+import { extractVariableIndices } from '@/lib/whatsapp/template-validators';
 import { Contact, MessageTemplate } from '@/types';
 
 export type CustomFieldOperator = 'is' | 'is_not' | 'contains';
@@ -39,11 +44,55 @@ export type VariableMapping =
   | { type: 'field'; value: string }
   | { type: 'custom_field'; value: string };
 
+/**
+ * Send-time values for the template's buttons, keyed by the button's
+ * index in `template.buttons` (the index Meta expects). Set for URL
+ * buttons whose link has a {{1}} suffix and for COPY_CODE buttons.
+ */
+export type ButtonVariables = Record<number, VariableMapping>;
+
+/**
+ * Indices of the buttons that take a value at send time: a URL button
+ * with {{1}} in its link, and a COPY_CODE button (its coupon code).
+ */
+export function buttonsNeedingParams(template: MessageTemplate): number[] {
+  const out: number[] = [];
+  (template.buttons ?? []).forEach((button, index) => {
+    if (
+      (button.type === 'URL' && extractVariableIndices(button.url).length > 0) ||
+      button.type === 'COPY_CODE'
+    ) {
+      out.push(index);
+    }
+  });
+  return out;
+}
+
+/**
+ * Button text of the first button still missing a value, or null when
+ * every button that needs one has it. A COPY_CODE button left empty
+ * falls back to the template's example code, so it only counts as
+ * missing when the template has no example either.
+ */
+export function missingButtonParam(
+  template: MessageTemplate,
+  buttonVariables: ButtonVariables,
+): string | null {
+  for (const index of buttonsNeedingParams(template)) {
+    const button = template.buttons![index];
+    if (buttonVariables[index]?.value?.trim()) continue;
+    if (button.type === 'COPY_CODE' && button.example?.trim()) continue;
+    return button.text || `#${index + 1}`;
+  }
+  return null;
+}
+
 interface BroadcastPayload {
   name: string;
   template: MessageTemplate;
   audience: AudienceConfig;
   variables: Record<string, VariableMapping>;
+  buttonVariables?: ButtonVariables;
   /**
    * Media URL for an IMAGE/VIDEO/DOCUMENT header. Required at send
    * time for media-header templates — Meta rejects the send without
@@ -108,23 +157,55 @@ export function resolveVariables(
     return a.localeCompare(b);
   });
 
-  return keys.map((key) => {
-    const v = variables[key];
-    if (v.type === 'static') return v.value;
+  return keys.map((key) => resolveMapping(variables[key], contact, customValues));
+}
 
-    if (v.type === 'field') {
-      const fieldMap: Record<string, string | undefined> = {
-        name: contact.name,
-        phone: contact.phone,
-        email: contact.email,
-        company: contact.company,
-      };
-      return fieldMap[v.value] ?? '';
-    }
+function resolveMapping(
+  v: VariableMapping,
+  contact: Contact,
+  customValues?: Map<string, string>,
+): string {
+  if (v.type === 'static') return v.value;
 
-    // custom_field
-    return customValues?.get(v.value) ?? '';
-  });
+  if (v.type === 'field') {
+    const fieldMap: Record<string, string | undefined> = {
+      name: contact.name,
+      phone: contact.phone,
+      email: contact.email,
+      company: contact.company,
+    };
+    return fieldMap[v.value] ?? '';
+  }
+
+  // custom_field
+  return customValues?.get(v.value) ?? '';
+}
+
+/** Per-contact button values, for the buttons that take one. */
+export function resolveButtonParams(
+  template: MessageTemplate,
+  buttonVariables: ButtonVariables,
+  contact: Contact,
+  customValues?: Map<string, string>,
+): Record<number, string> {
+  const out: Record<number, string> = {};
+  for (const index of buttonsNeedingParams(template)) {
+    const mapping = buttonVariables[index];
+    if (!mapping?.value?.trim()) continue; // COPY_CODE → template example
+    out[index] = resolveMapping(mapping, contact, customValues);
+  }
+  return out;
+}
+
+/** The media link to send for a media-header template, if any. */
+function headerMediaUrlFor(
+  template: MessageTemplate,
+  headerMediaUrl: string | undefined,
+): string | undefined {
+  const headerType = template.header_type;
+  const isMediaHeader =
+    headerType === 'image' || headerType === 'video' || headerType === 'document';
+  return (isMediaHeader && headerMediaUrl?.trim()) || undefined;
 }
 
 /**
@@ -160,6 +241,7 @@ async function fetchCustomValueIndex(
 export interface TestSendPayload {
   template: MessageTemplate;
   variables: Record<string, VariableMapping>;
+  buttonVariables?: ButtonVariables;
   headerMediaUrl?: string;
   /** International number, country code included. */
   phone: string;
@@ -179,6 +261,10 @@ export type TestSendResult =
 export async function sendTestMessage(
   payload: TestSendPayload,
 ): Promise<TestSendResult> {
+  const buttonVariables = payload.buttonVariables ?? {};
+  const missing = missingButtonParam(payload.template, buttonVariables);
+  if (missing) return { ok: false, error: `"${missing}" button needs a value` };
+
   const supabase = createClient();
   const key = normalizeKey(payload.phone);
   if (!key) return { ok: false, error: 'Enter a phone number' };
@@ -198,23 +284,27 @@ export async function sendTestMessage(
     ? (await fetchCustomValueIndex(supabase, [contact.id])).get(contact.id)
     : undefined;
 
-  const headerType = payload.template.header_type;
-  const isMediaHeader =
-    headerType === 'image' || headerType === 'video' || headerType === 'document';
-  const headerMediaUrl = payload.headerMediaUrl?.trim();
+  const body = resolveVariables(payload.variables, contact, customValues);
+  const buttonParams = resolveButtonParams(
+    payload.template,
+    buttonVariables,
+    contact,
+    customValues,
+  );
+  const { params, messageParams } = parseRecipientParams(
+    toStoredRecipientParams({
+      body,
+      buttonParams,
+      headerMediaUrl: headerMediaUrlFor(payload.template, payload.headerMediaUrl),
+    }),
+  );
 
   const res = await fetch('/api/whatsapp/broadcast', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       recipients: [
-        {
-          phone: payload.phone,
-          params: resolveVariables(payload.variables, contact, customValues),
-          ...(isMediaHeader && headerMediaUrl
-            ? { messageParams: { headerMediaUrl } }
-            : {}),
-        },
+        { phone: payload.phone, params, ...(messageParams ? { messageParams } : {}) },
       ],
       template_name: payload.template.name,
       template_language: payload.template.language ?? 'en_US',
@@ -442,6 +532,13 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
         throw new Error('Your profile is not linked to an account.');
       }
 
+      const buttonVariables = payload.buttonVariables ?? {};
+      const missingButton = missingButtonParam(payload.template, buttonVariables);
+      if (missingButton) {
+        throw new Error(`"${missingButton}" button needs a value.`);
+      }
+      const headerMediaUrl = headerMediaUrlFor(payload.template, payload.headerMediaUrl);
+
       // ── Step 1: Resolve audience contacts ─────────────────────────
       setProgress(5);
       const contacts = await resolveAudience(payload.audience);
@@ -497,22 +594,26 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
         supabase,
         contacts.map((c) => c.id),
       );
-      const paramsByContact = new Map(
-        contacts.map((contact) => [
-          contact.id,
-          resolveVariables(
-            payload.variables,
-            contact,
-            customValueIndex.get(contact.id),
-          ),
-        ]),
-      );
-      const recipientRows = contacts.map((contact) => ({
-        broadcast_id: broadcast.id,
-        contact_id: contact.id,
-        status: 'pending' as const,
-        template_params: paramsByContact.get(contact.id) ?? [],
-      }));
+      // Button values and the header link ride on the same row, so a
+      // resume sends them too (see lib/whatsapp/recipient-params).
+      const recipientRows = contacts.map((contact) => {
+        const customValues = customValueIndex.get(contact.id);
+        return {
+          broadcast_id: broadcast.id,
+          contact_id: contact.id,
+          status: 'pending' as const,
+          template_params: toStoredRecipientParams({
+            body: resolveVariables(payload.variables, contact, customValues),
+            buttonParams: resolveButtonParams(
+              payload.template,
+              buttonVariables,
+              contact,
+              customValues,
+            ),
+            headerMediaUrl,
+          }),
+        };
+      });
 
       for (let i = 0; i < recipientRows.length; i += INSERT_BATCH_SIZE) {
         const batch = recipientRows.slice(i, i + INSERT_BATCH_SIZE);
@@ -552,31 +653,25 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
       let failedCount = 0;
       const totalRecipients = recipients.length;
 
-      // Media-header templates (image/video/document) require a media
-      // URL on every send. Collected in the personalize step and applied
-      // to all recipients; falls back to the template's stored URL on the
-      // server when omitted.
-      const headerType = payload.template.header_type;
-      const isMediaHeader =
-        headerType === 'image' ||
-        headerType === 'video' ||
-        headerType === 'document';
-      const headerMediaUrl = payload.headerMediaUrl?.trim();
-      const messageParams =
-        isMediaHeader && headerMediaUrl ? { headerMediaUrl } : undefined;
-
       for (let i = 0; i < recipients.length; i += SEND_BATCH_SIZE) {
         const batch = recipients.slice(i, i + SEND_BATCH_SIZE);
 
         const apiRecipients = batch
           .filter((r) => r.contact?.phone)
-          .map((r) => ({
-            phone: r.contact!.phone as string,
+          .map((r) => {
             // Read back off the row rather than re-resolved, so this
-            // pass and any later resume send identical params.
-            params: Array.isArray(r.template_params) ? r.template_params : [],
-            ...(messageParams ? { messageParams } : {}),
-          }));
+            // pass and any later resume send identical params. A
+            // media-header template whose link was left empty falls
+            // back to the template's stored URL on the server.
+            const { params, messageParams } = parseRecipientParams(
+              r.template_params,
+            );
+            return {
+              phone: r.contact!.phone as string,
+              params,
+              ...(messageParams ? { messageParams } : {}),
+            };
+          });
 
         if (apiRecipients.length === 0) continue;
 

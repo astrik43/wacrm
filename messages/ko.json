@@ -811,6 +811,30 @@
         "loadingFields": "불러오는 중…",
         "noCustomFields": "커스텀 필드 없음",
         "unmappedWarning": "계속하기 전에 모든 자리표시자를 매핑하세요 — 아직 <mono>{keys}</mono>이(가) 비어 있습니다. 그대로 두면 해당 자리표시자가 빈 문자열로 Meta에 전송됩니다.",
+        "headerMedia": {
+          "image": {
+            "title": "헤더 이미지",
+            "url": "이미지 URL",
+            "placeholder": "https://example.com/image.jpg",
+            "desc": "이 템플릿에는 헤더 이미지가 필요합니다."
+          },
+          "video": {
+            "title": "헤더 동영상",
+            "url": "동영상 URL",
+            "placeholder": "https://example.com/video.mp4",
+            "desc": "이 템플릿에는 헤더 동영상이 필요합니다(MP4, 최대 16MB)."
+          },
+          "document": {
+            "title": "헤더 문서",
+            "url": "문서 URL",
+            "placeholder": "https://example.com/file.pdf",
+            "desc": "이 템플릿에는 헤더 문서가 필요합니다."
+          }
+        },
+        "openDocument": "문서 열기",
+        "buttonParam": "버튼 매개변수: {button}",
+        "couponCode": "쿠폰 코드: {button}",
+        "buttonParamMissing": "계속하려면 \"{button}\" 버튼에 값이 필요합니다.",
         "fieldMap": {
           "name": "이름",
           "phone": "전화번호",
