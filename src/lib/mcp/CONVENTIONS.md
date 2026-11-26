@@ -49,7 +49,10 @@ export const tagsTools = [
 10. **Migrations:** only if you really need one, use the number allocated to your workstream (below), make it idempotent, and add an assertion INSIDE the single DO block of `supabase/ci/verify-schema.sql`.
 
 ## Migration numbers
-`054` foundation (audit log) · `055` ops/staff/NDR/events · `056` inbox/templates · `057` broadcasts · `058` pipeline/automations/flows · `059` ai/settings · `060` commerce/reports
+`054` audit log and `055` `contacts.is_staff` are already on the foundation branch (don't redo them). Your workstream's number: `056` ops/NDR/events · `057` inbox/templates · `058` broadcasts · `059` pipeline/automations/flows · `060` ai/settings · `061` commerce/reports. Only create one if you truly need it.
+
+## Staff contacts
+`contacts.is_staff` marks internal team members. Marketing paths must skip them: broadcast audiences (including "All contacts"), marketing counts and spend, abandoned-cart and order-update sends, and customer metrics (response time, open conversations). Use `.eq('is_staff', false)` (or `neq(true)`) wherever a customer list or metric is built.
 
 ## Check before you finish
 `npm run typecheck && npm run lint && npm test && NEXT_PUBLIC_SUPABASE_URL=https://x.supabase.co NEXT_PUBLIC_SUPABASE_ANON_KEY=x SUPABASE_SERVICE_ROLE_KEY=x npm run build`

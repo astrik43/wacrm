@@ -229,6 +229,16 @@ BEGIN
       'mcp_audit_log is missing — migration 054 did not apply';
   END IF;
 
+  -- Staff flag (055). Read by the audience resolvers and every
+  -- marketing path to leave the internal team out.
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'contacts' AND column_name = 'is_staff'
+  ) THEN
+    RAISE EXCEPTION
+      'contacts.is_staff is missing — migration 055 did not apply';
+  END IF;
+
   RAISE NOTICE 'schema verification passed';
 END
 $$;
