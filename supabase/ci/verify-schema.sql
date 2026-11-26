@@ -222,6 +222,13 @@ BEGIN
       'shopify_configs.shiprocket_* columns are missing — migration 053 did not apply';
   END IF;
 
+  -- MCP audit log (054). Written by the MCP endpoint on every
+  -- non-read tool call; the idempotency index makes retries safe.
+  IF to_regclass('public.mcp_audit_log') IS NULL THEN
+    RAISE EXCEPTION
+      'mcp_audit_log is missing — migration 054 did not apply';
+  END IF;
+
   RAISE NOTICE 'schema verification passed';
 END
 $$;
