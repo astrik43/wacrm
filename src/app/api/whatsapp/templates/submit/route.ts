@@ -1,107 +1,28 @@
 import { NextResponse } from 'next/server'
-import type { SupabaseClient } from '@supabase/supabase-js'
 import {
   ForbiddenError,
   UnauthorizedError,
   requireRole,
   toErrorResponse,
 } from '@/lib/auth/account'
-import { decrypt } from '@/lib/whatsapp/encryption'
-import {
-  describeMetaError,
-  submitMessageTemplate,
-} from '@/lib/whatsapp/meta-api'
-import {
-  validateTemplatePayload,
-  type TemplatePayload,
-} from '@/lib/whatsapp/template-validators'
-import { buildMetaTemplatePayload } from '@/lib/whatsapp/template-components'
-import { ensureMediaHeaderHandle } from '@/lib/whatsapp/template-header-handle'
-import { normalizeStatus } from '@/lib/whatsapp/template-status-normalize'
+import type { TemplatePayload } from '@/lib/whatsapp/template-validators'
+import { submitTemplate, TemplateOpError } from '@/lib/whatsapp/template-ops'
 
 /**
- * Shared upsert payload builder — both the Meta-failure path and the
- * Meta-success path write nearly identical rows; dropping the shared
- * fields here means adding a column later only touches one spot.
- */
-function buildUpsertRow(
-  accountId: string,
-  userId: string,
-  payload: TemplatePayload,
-  extras: {
-    status: 'DRAFT' | string
-    metaTemplateId: string | null
-    submissionError: string | null
-  },
-) {
-  return {
-    // Account tenancy — required NOT NULL on message_templates as
-    // of migration 017. Without this an INSERT throws on the
-    // not-null constraint.
-    account_id: accountId,
-    // Original author — kept as audit only. The unique index is
-    // still on (user_id, name, language) — see the upsert helper
-    // for the cross-teammate dedup follow-up.
-    user_id: userId,
-    name: payload.name,
-    category: payload.category,
-    language: payload.language,
-    header_type: payload.header_type ?? null,
-    header_content: payload.header_content ?? null,
-    header_media_url: payload.header_media_url ?? null,
-    header_handle: payload.header_handle ?? null,
-    body_text: payload.body_text,
-    footer_text: payload.footer_text ?? null,
-    buttons: payload.buttons ?? null,
-    sample_values: payload.sample_values ?? null,
-    status: extras.status,
-    meta_template_id: extras.metaTemplateId,
-    submission_error: extras.submissionError,
-    // Clear stale rejection_reason whenever we re-submit; the
-    // webhook will set it again if Meta still rejects.
-    rejection_reason: extras.submissionError ? null : null,
-    last_submitted_at: new Date().toISOString(),
-  }
-}
-
-async function upsertTemplateRow(
-  supabase: SupabaseClient,
-  row: ReturnType<typeof buildUpsertRow>,
-) {
-  // TODO(account-sharing): conflict target is still scoped to
-  // user_id. Once a follow-up migration drops the legacy unique
-  // index on (user_id, name, language) and adds (account_id,
-  // name, language), switch `onConflict` here so two teammates
-  // can't shadow each other's same-named template.
-  return supabase
-    .from('message_templates')
-    .upsert(row, { onConflict: 'user_id,name,language' })
-    .select()
-    .single()
-}
-
-/**
- * Submit a template to Meta for approval AND persist it locally.
+ * Submit a template to Meta for approval AND persist it locally. The
+ * logic lives in `submitTemplate` (src/lib/whatsapp/template-ops.ts),
+ * shared with the MCP `submit_template` tool; this route owns auth and
+ * the response shape.
  *
- * Auth → fetch whatsapp_config → validate → (DRY_RUN short-circuit) →
- * POST to Meta → upsert local row by (user_id, name, language) with
- * status, meta_template_id, sample_values, last_submitted_at.
- *
- * When WHATSAPP_TEMPLATES_DRY_RUN=true, we skip the network call and
- * insert a row with a synthetic `dry-run-<uuid>` meta_template_id so
- * CI / local dev can exercise the full UI without a real Meta App.
- *
- * On the Meta side this is a one-way trip — a row can only be
- * submitted; editing or deleting requires hsm_id and lives in PR 4.
+ * When WHATSAPP_TEMPLATES_DRY_RUN=true the Meta call is skipped and a
+ * synthetic `dry-run-<uuid>` meta_template_id is stored.
  */
 export async function POST(request: Request) {
   try {
     // Message templates are settings-class data: `canEditSettings` and the
     // message_templates_insert/update RLS policies (migration 017) both
-    // require 'admin'. Resolving account_id off the profile only proved
-    // membership, so a viewer or agent could push a template to Meta for
-    // approval — an external side effect RLS can't roll back — before the
-    // local upsert was refused.
+    // require 'admin'. A viewer or agent must not push a template to Meta
+    // (an external side effect RLS can't roll back).
     const { supabase, accountId, userId } = await requireRole('admin')
 
     let payload: TemplatePayload
@@ -111,141 +32,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid JSON body.' }, { status: 400 })
     }
 
-    if (payload.category === 'Authentication') {
-      return NextResponse.json(
-        {
-          error:
-            'AUTHENTICATION templates are not yet supported here — create them in Meta WhatsApp Manager and use "Sync from Meta".',
-        },
-        { status: 400 },
-      )
-    }
-
     try {
-      validateTemplatePayload(payload)
+      const { template, dry_run } = await submitTemplate(
+        supabase,
+        accountId,
+        userId,
+        payload,
+      )
+      return NextResponse.json({ success: true, template, dry_run })
     } catch (e) {
-      return NextResponse.json(
-        { error: e instanceof Error ? e.message : 'Validation failed.' },
-        { status: 400 },
-      )
+      if (e instanceof TemplateOpError) {
+        return NextResponse.json(
+          { error: e.message, ...(e.extra ?? {}) },
+          { status: e.status },
+        )
+      }
+      throw e
     }
-
-    const dryRun =
-      process.env.WHATSAPP_TEMPLATES_DRY_RUN === 'true' ||
-      process.env.WHATSAPP_TEMPLATES_DRY_RUN === '1'
-
-    let metaTemplateId: string
-    let metaStatus: string
-
-    if (dryRun) {
-      metaTemplateId = `dry-run-${crypto.randomUUID()}`
-      metaStatus = 'PENDING'
-    } else {
-      const { data: config, error: configError } = await supabase
-        .from('whatsapp_config')
-        .select('*')
-        .eq('account_id', accountId)
-        .single()
-      if (configError || !config) {
-        return NextResponse.json(
-          {
-            error:
-              'WhatsApp not configured. Connect your WhatsApp Business account in Settings first.',
-          },
-          { status: 400 },
-        )
-      }
-      if (!config.waba_id) {
-        return NextResponse.json(
-          {
-            error:
-              'WABA (WhatsApp Business Account) ID missing. Re-connect your account in Settings.',
-          },
-          { status: 400 },
-        )
-      }
-
-      const accessToken = decrypt(config.access_token)
-
-      // Media headers (image/video/document) need a Resumable-Upload
-      // handle (Meta rejects a plain URL at creation). Derive it from
-      // header_media_url before building the payload. Surfaces a 400 with
-      // an actionable message (missing META_APP_ID, unreachable URL,
-      // wrong type/size).
-      try {
-        await ensureMediaHeaderHandle(payload, accessToken)
-      } catch (e) {
-        return NextResponse.json(
-          { error: e instanceof Error ? e.message : 'Header media upload failed.' },
-          { status: 400 },
-        )
-      }
-
-      const metaPayload = buildMetaTemplatePayload(payload)
-      try {
-        const meta = await submitMessageTemplate({
-          wabaId: config.waba_id,
-          accessToken,
-          payload: metaPayload,
-        })
-        metaTemplateId = meta.id
-        metaStatus = meta.status
-      } catch (e) {
-        const message = describeMetaError(e, 'Meta submit failed.')
-        // Persist the failure so the user can retry; row stays DRAFT
-        // until they fix and re-submit.
-        await upsertTemplateRow(
-          supabase,
-          buildUpsertRow(accountId, userId, payload, {
-            status: 'DRAFT',
-            metaTemplateId: null,
-            submissionError: message,
-          }),
-        )
-        const isRateLimit = /\b429\b/.test(message)
-        return NextResponse.json(
-          {
-            error: isRateLimit
-              ? 'Meta rate limit hit (100 template creates per hour). Try again later.'
-              : message,
-          },
-          { status: isRateLimit ? 429 : 502 },
-        )
-      }
-    }
-
-    const { data: row, error: upsertErr } = await upsertTemplateRow(
-      supabase,
-      buildUpsertRow(accountId, userId, payload, {
-        status: normalizeStatus(metaStatus),
-        metaTemplateId,
-        submissionError: null,
-      }),
-    )
-
-    if (upsertErr) {
-      // The submit succeeded on Meta's side but we failed to persist
-      // locally. That's a data-drift state — surface the meta_template_id
-      // so the user can recover via "Sync from Meta".
-      return NextResponse.json(
-        {
-          error: `Submitted to Meta but failed to save locally: ${upsertErr.message}. Run "Sync from Meta" to recover.`,
-          meta_template_id: metaTemplateId,
-        },
-        { status: 500 },
-      )
-    }
-
-    return NextResponse.json({
-      success: true,
-      template: row,
-      dry_run: dryRun,
-    })
   } catch (error) {
-    // Auth failures map to 401/403. Handled before the generic branch
-    // below, which surfaces `error.message` as a 500 — reporting "you
-    // aren't an admin" as a template submission failure would send the
-    // user chasing the wrong problem.
+    // Auth failures map to 401/403 rather than a generic 500.
     if (
       error instanceof UnauthorizedError ||
       error instanceof ForbiddenError
