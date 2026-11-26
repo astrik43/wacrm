@@ -834,7 +834,15 @@
         "estimatedReach": "Alcance estimado",
         "language": "Idioma",
         "confirmTitle": "Confirmar disparo",
-        "confirmDesc": "Você está prestes a enviar este disparo para <b>{count, number}</b> {count, plural, =1 {contato} other {contatos}} usando o modelo <b>{template}</b>. Esta ação não pode ser desfeita."
+        "confirmDesc": "Você está prestes a enviar este disparo para <b>{count, number}</b> {count, plural, =1 {contato} other {contatos}} usando o modelo <b>{template}</b>. Esta ação não pode ser desfeita.",
+        "sendTest": "Enviar teste",
+        "testTitle": "Enviar uma mensagem de teste",
+        "testDesc": "Envia esta mensagem para um número agora, para você conferir no celular. Não faz parte da transmissão e mais ninguém a recebe.",
+        "testPhonePlaceholder": "Número com código do país, ex.: 919876543210",
+        "testSend": "Enviar teste",
+        "testSent": "Teste enviado para {phone}",
+        "testSentNoContact": "Teste enviado para {phone}. Esse número não é um contato, então variáveis de nome mostram \"Test\".",
+        "testFailed": "Falha no teste: {error}"
       }
     }
   },

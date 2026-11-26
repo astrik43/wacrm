@@ -157,6 +157,81 @@ async function fetchCustomValueIndex(
   return index;
 }
 
+export interface TestSendPayload {
+  template: MessageTemplate;
+  variables: Record<string, VariableMapping>;
+  headerMediaUrl?: string;
+  /** International number, country code included. */
+  phone: string;
+}
+
+export type TestSendResult =
+  | { ok: true; contactFound: boolean }
+  | { ok: false; error: string };
+
+/**
+ * Send the broadcast's message to a single number, right now, so it can
+ * be checked on a real phone before it goes to the audience. Nothing is
+ * recorded: no broadcast row, no recipient rows. Variables resolve
+ * against the contact with that number when there is one (so {{1}} =
+ * name shows the real name), otherwise against a stand-in named "Test".
+ */
+export async function sendTestMessage(
+  payload: TestSendPayload,
+): Promise<TestSendResult> {
+  const supabase = createClient();
+  const key = normalizeKey(payload.phone);
+  if (!key) return { ok: false, error: 'Enter a phone number' };
+
+  const { data: found } = await supabase
+    .from('contacts')
+    .select('*')
+    .eq('phone_normalized', key)
+    .limit(1)
+    .maybeSingle();
+  const contact = (found as Contact | null) ?? ({
+    id: '',
+    name: 'Test',
+    phone: payload.phone,
+  } as Contact);
+  const customValues = found
+    ? (await fetchCustomValueIndex(supabase, [contact.id])).get(contact.id)
+    : undefined;
+
+  const headerType = payload.template.header_type;
+  const isMediaHeader =
+    headerType === 'image' || headerType === 'video' || headerType === 'document';
+  const headerMediaUrl = payload.headerMediaUrl?.trim();
+
+  const res = await fetch('/api/whatsapp/broadcast', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      recipients: [
+        {
+          phone: payload.phone,
+          params: resolveVariables(payload.variables, contact, customValues),
+          ...(isMediaHeader && headerMediaUrl
+            ? { messageParams: { headerMediaUrl } }
+            : {}),
+        },
+      ],
+      template_name: payload.template.name,
+      template_language: payload.template.language ?? 'en_US',
+    }),
+  });
+  const data = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    results?: BroadcastApiResult[];
+  };
+  if (!res.ok) return { ok: false, error: data.error || 'Test send failed' };
+  const result = data.results?.[0];
+  if (result?.status !== 'sent') {
+    return { ok: false, error: result?.error || 'Test send failed' };
+  }
+  return { ok: true, contactFound: Boolean(found) };
+}
+
 export function useBroadcastSending(): UseBroadcastSendingReturn {
   const { accountId } = useAuth();
   const [isProcessing, setIsProcessing] = useState(false);

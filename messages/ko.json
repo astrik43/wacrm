@@ -840,7 +840,15 @@
         "estimatedReach": "예상 도달 수",
         "language": "언어",
         "confirmTitle": "브로드캐스트 확인",
-        "confirmDesc": "<b>{template}</b> 템플릿으로 연락처 <b>{count, number}</b>명에게 이 브로드캐스트를 보내려고 합니다. 이 작업은 되돌릴 수 없습니다."
+        "confirmDesc": "<b>{template}</b> 템플릿으로 연락처 <b>{count, number}</b>명에게 이 브로드캐스트를 보내려고 합니다. 이 작업은 되돌릴 수 없습니다.",
+        "sendTest": "테스트 전송",
+        "testTitle": "테스트 메시지 보내기",
+        "testDesc": "이 메시지를 지금 한 번호로 보내 휴대폰에서 확인할 수 있습니다. 브로드캐스트에 포함되지 않으며 다른 사람은 받지 않습니다.",
+        "testPhonePlaceholder": "국가 코드 포함 번호, 예: 919876543210",
+        "testSend": "테스트 전송",
+        "testSent": "{phone}(으)로 테스트를 보냈습니다",
+        "testSentNoContact": "{phone}(으)로 테스트를 보냈습니다. 연락처가 아니므로 이름 변수는 \"Test\"로 표시됩니다.",
+        "testFailed": "테스트 실패: {error}"
       }
     }
   },
