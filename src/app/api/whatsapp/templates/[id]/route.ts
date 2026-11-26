@@ -2,11 +2,10 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import {
-  deleteMessageTemplate,
   describeMetaError,
   editMessageTemplate,
-  templateBelongsToWaba,
 } from '@/lib/whatsapp/meta-api'
+import { deleteTemplate, TemplateOpError } from '@/lib/whatsapp/template-ops'
 import {
   validateTemplatePayload,
   type TemplatePayload,
@@ -271,66 +270,15 @@ export async function DELETE(
       )
     }
 
-    const { data: existing, error: lookupErr } = await supabase
-      .from('message_templates')
-      .select('id, name, meta_template_id')
-      .eq('id', id)
-      .eq('account_id', accountId)
-      .maybeSingle()
-    if (lookupErr || !existing) {
-      return NextResponse.json({ error: 'Template not found.' }, { status: 404 })
-    }
-
-    if (existing.meta_template_id && !isDryRun()) {
-      const { data: config, error: configError } = await supabase
-        .from('whatsapp_config')
-        .select('*')
-        .eq('account_id', accountId)
-        .single()
-      if (configError || !config || !config.waba_id) {
-        return NextResponse.json(
-          { error: 'WhatsApp not configured — cannot delete on Meta.' },
-          { status: 400 },
-        )
+    try {
+      const { dry_run } = await deleteTemplate(supabase, accountId, id)
+      return NextResponse.json({ success: true, dry_run })
+    } catch (e) {
+      if (e instanceof TemplateOpError) {
+        return NextResponse.json({ error: e.message }, { status: e.status })
       }
-      const accessToken = decrypt(config.access_token)
-      // A row left over from a previously connected WABA isn't on this
-      // one, and Meta rejects deleting it here — just drop it locally.
-      const onThisWaba = await templateBelongsToWaba({
-        wabaId: config.waba_id,
-        accessToken,
-        name: existing.name,
-        metaTemplateId: existing.meta_template_id,
-      })
-      if (onThisWaba !== false) {
-        try {
-          await deleteMessageTemplate({
-            wabaId: config.waba_id,
-            accessToken,
-            name: existing.name,
-            metaTemplateId: existing.meta_template_id,
-          })
-        } catch (e) {
-          const message = e instanceof Error ? e.message : 'Meta delete failed.'
-          return NextResponse.json({ error: message }, { status: 502 })
-        }
-      }
+      throw e
     }
-
-    const { error: delErr } = await supabase
-      .from('message_templates')
-      .delete()
-      .eq('id', id)
-    if (delErr) {
-      return NextResponse.json(
-        {
-          error: `Deleted on Meta but failed to delete locally: ${delErr.message}.`,
-        },
-        { status: 500 },
-      )
-    }
-
-    return NextResponse.json({ success: true, dry_run: isDryRun() })
   } catch (error) {
     console.error('Error deleting template:', error)
     return NextResponse.json(
