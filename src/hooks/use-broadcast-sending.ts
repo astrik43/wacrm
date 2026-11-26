@@ -13,80 +13,35 @@ import {
   parseRecipientParams,
   toStoredRecipientParams,
 } from '@/lib/whatsapp/recipient-params';
-import { extractVariableIndices } from '@/lib/whatsapp/template-validators';
 import { Contact, MessageTemplate } from '@/types';
 
-export type CustomFieldOperator = 'is' | 'is_not' | 'contains';
+import {
+  headerMediaUrlFor,
+  fetchCustomValueIndex,
+  missingButtonParam,
+  resolveButtonParams,
+  resolveVariables,
+  type AudienceConfig,
+  type ButtonVariables,
+  type CustomFieldFilter,
+  type VariableMapping,
+} from '@/lib/broadcasts/shared';
 
-export interface CustomFieldFilter {
-  fieldId: string;
-  operator: CustomFieldOperator;
-  value: string;
-}
-
-export interface AudienceConfig {
-  type: 'all' | 'tags' | 'custom_field' | 'csv';
-  tagIds?: string[];
-  customField?: CustomFieldFilter;
-  csvContacts?: { phone: string; name?: string }[];
-  /** Contacts carrying any of these tags are subtracted from the result. */
-  excludeTagIds?: string[];
-}
-
-/**
- * Variable mapping — each template placeholder (by key, usually "1",
- * "2", …) is resolved at send time. `field` maps to a built-in contact
- * field (name/phone/email/company); `custom_field` maps to a
- * contact_custom_values.value row keyed by the custom_fields.id stored
- * in `value`.
- */
-export type VariableMapping =
-  | { type: 'static'; value: string }
-  | { type: 'field'; value: string }
-  | { type: 'custom_field'; value: string };
-
-/**
- * Send-time values for the template's buttons, keyed by the button's
- * index in `template.buttons` (the index Meta expects). Set for URL
- * buttons whose link has a {{1}} suffix and for COPY_CODE buttons.
- */
-export type ButtonVariables = Record<number, VariableMapping>;
-
-/**
- * Indices of the buttons that take a value at send time: a URL button
- * with {{1}} in its link, and a COPY_CODE button (its coupon code).
- */
-export function buttonsNeedingParams(template: MessageTemplate): number[] {
-  const out: number[] = [];
-  (template.buttons ?? []).forEach((button, index) => {
-    if (
-      (button.type === 'URL' && extractVariableIndices(button.url).length > 0) ||
-      button.type === 'COPY_CODE'
-    ) {
-      out.push(index);
-    }
-  });
-  return out;
-}
-
-/**
- * Button text of the first button still missing a value, or null when
- * every button that needs one has it. A COPY_CODE button left empty
- * falls back to the template's example code, so it only counts as
- * missing when the template has no example either.
- */
-export function missingButtonParam(
-  template: MessageTemplate,
-  buttonVariables: ButtonVariables,
-): string | null {
-  for (const index of buttonsNeedingParams(template)) {
-    const button = template.buttons![index];
-    if (buttonVariables[index]?.value?.trim()) continue;
-    if (button.type === 'COPY_CODE' && button.example?.trim()) continue;
-    return button.text || `#${index + 1}`;
-  }
-  return null;
-}
+// The pure broadcast logic lives in src/lib/broadcasts/shared so the MCP
+// tools use the same copy. Re-exported so existing imports keep working.
+export {
+  buttonsNeedingParams,
+  missingButtonParam,
+  resolveButtonParams,
+  resolveVariables,
+} from '@/lib/broadcasts/shared';
+export type {
+  AudienceConfig,
+  ButtonVariables,
+  CustomFieldFilter,
+  CustomFieldOperator,
+  VariableMapping,
+} from '@/lib/broadcasts/shared';
 
 interface BroadcastPayload {
   name: string;
@@ -134,109 +89,6 @@ interface BroadcastApiResult {
   status: 'sent' | 'failed';
   whatsapp_message_id?: string;
   error?: string;
-}
-
-/** contactId → (customFieldId → value). */
-type CustomValueIndex = Map<string, Map<string, string>>;
-
-/**
- * Per-contact resolution of custom-field placeholders. Static and
- * built-in-field mappings resolve synchronously; custom fields read
- * from a pre-built index to avoid N+1 queries during the send loop.
- */
-export function resolveVariables(
-  variables: Record<string, VariableMapping>,
-  contact: Contact,
-  customValues?: Map<string, string>,
-): string[] {
-  // Keys are typically "1","2",... — numeric-aware sort keeps
-  // {{1}} before {{10}}.
-  const keys = Object.keys(variables).sort((a, b) => {
-    const an = Number(a);
-    const bn = Number(b);
-    if (Number.isFinite(an) && Number.isFinite(bn)) return an - bn;
-    return a.localeCompare(b);
-  });
-
-  return keys.map((key) => resolveMapping(variables[key], contact, customValues));
-}
-
-function resolveMapping(
-  v: VariableMapping,
-  contact: Contact,
-  customValues?: Map<string, string>,
-): string {
-  if (v.type === 'static') return v.value;
-
-  if (v.type === 'field') {
-    const fieldMap: Record<string, string | undefined> = {
-      name: contact.name,
-      phone: contact.phone,
-      email: contact.email,
-      company: contact.company,
-    };
-    return fieldMap[v.value] ?? '';
-  }
-
-  // custom_field
-  return customValues?.get(v.value) ?? '';
-}
-
-/** Per-contact button values, for the buttons that take one. */
-export function resolveButtonParams(
-  template: MessageTemplate,
-  buttonVariables: ButtonVariables,
-  contact: Contact,
-  customValues?: Map<string, string>,
-): Record<number, string> {
-  const out: Record<number, string> = {};
-  for (const index of buttonsNeedingParams(template)) {
-    const mapping = buttonVariables[index];
-    if (!mapping?.value?.trim()) continue; // COPY_CODE → template example
-    out[index] = resolveMapping(mapping, contact, customValues);
-  }
-  return out;
-}
-
-/** The media link to send for a media-header template, if any. */
-function headerMediaUrlFor(
-  template: MessageTemplate,
-  headerMediaUrl: string | undefined,
-): string | undefined {
-  const headerType = template.header_type;
-  const isMediaHeader =
-    headerType === 'image' || headerType === 'video' || headerType === 'document';
-  return (isMediaHeader && headerMediaUrl?.trim()) || undefined;
-}
-
-/**
- * Bulk-fetch contact_custom_values for a set of contacts. Returns an
- * index keyed by contact_id → field_id → value.
- */
-async function fetchCustomValueIndex(
-  supabase: ReturnType<typeof createClient>,
-  contactIds: string[],
-): Promise<CustomValueIndex> {
-  const index: CustomValueIndex = new Map();
-  if (contactIds.length === 0) return index;
-
-  // Supabase PostgREST caps the .in(...) IN-clause roughly at 1000
-  // values. Page through to stay safe.
-  const PAGE = 500;
-  for (let i = 0; i < contactIds.length; i += PAGE) {
-    const slice = contactIds.slice(i, i + PAGE);
-    const { data } = await supabase
-      .from('contact_custom_values')
-      .select('contact_id, custom_field_id, value')
-      .in('contact_id', slice);
-
-    for (const row of data ?? []) {
-      const bucket = index.get(row.contact_id) ?? new Map<string, string>();
-      bucket.set(row.custom_field_id, row.value ?? '');
-      index.set(row.contact_id, bucket);
-    }
-  }
-  return index;
 }
 
 export interface TestSendPayload {
@@ -323,192 +175,207 @@ export async function sendTestMessage(
   return { ok: true, contactFound: Boolean(found) };
 }
 
+export async function resolveAudience(
+  supabase: ReturnType<typeof createClient>,
+  accountId: string | null | undefined,
+  audience: AudienceConfig,
+): Promise<Contact[]> {
+
+  let contacts: Contact[] = [];
+
+  if (audience.type === 'all') {
+    // Staff (contacts.is_staff) are never marketed to, even under "All".
+    const { data, error } = await supabase
+      .from('contacts')
+      .select('*')
+      .eq('is_staff', false);
+    if (error) throw new Error(`Failed to fetch contacts: ${error.message}`);
+    contacts = data ?? [];
+  } else if (
+    audience.type === 'tags' &&
+    audience.tagIds &&
+    audience.tagIds.length > 0
+  ) {
+    const { data: contactTags, error: tagError } = await supabase
+      .from('contact_tags')
+      .select('contact_id')
+      .in('tag_id', audience.tagIds);
+
+    if (tagError)
+      throw new Error(`Failed to fetch contact tags: ${tagError.message}`);
+
+    if (contactTags && contactTags.length > 0) {
+      const uniqueContactIds = [
+        ...new Set(contactTags.map((ct) => ct.contact_id)),
+      ];
+      const { data, error } = await supabase
+        .from('contacts')
+        .select('*')
+        .eq('is_staff', false)
+        .in('id', uniqueContactIds);
+      if (error) throw new Error(`Failed to fetch contacts: ${error.message}`);
+      contacts = data ?? [];
+    }
+  } else if (audience.type === 'custom_field' && audience.customField) {
+    contacts = await resolveCustomFieldAudience(supabase, audience.customField);
+  } else if (audience.type === 'csv' && audience.csvContacts) {
+    contacts = await upsertCsvContacts(supabase, accountId, audience.csvContacts);
+  }
+
+  // Apply exclude tags (works across all contact-derived audience
+  // types). CSV contacts are synthetic so exclusion doesn't apply.
+  if (audience.excludeTagIds && audience.excludeTagIds.length > 0) {
+    const { data: excludeRows } = await supabase
+      .from('contact_tags')
+      .select('contact_id')
+      .in('tag_id', audience.excludeTagIds);
+    const excludedIds = new Set((excludeRows ?? []).map((r) => r.contact_id));
+    contacts = contacts.filter((c) => !excludedIds.has(c.id));
+  }
+
+  return contacts;
+}
+
+/**
+ * CSV uploads arrive as raw phone/name pairs, not DB rows. Before we
+ * can insert broadcast_recipients (whose contact_id FKs contacts.id),
+ * we need real contacts.id UUIDs. So: look up each CSV phone in the
+ * caller's contacts table; insert any that don't exist; return the
+ * resolved set.
+ *
+ * Pre-existing implementation synthesized `csv-N` strings as
+ * contact_id, which failed the UUID cast on insert — every CSV
+ * broadcast silently created zero recipients.
+ *
+ * Matching is on the normalized number throughout, so it agrees with
+ * the account-wide unique index rather than colliding with it.
+ */
+async function upsertCsvContacts(
+  supabase: ReturnType<typeof createClient>,
+  accountId: string | null | undefined,
+  csvRows: { phone: string; name?: string }[],
+): Promise<Contact[]> {
+  if (csvRows.length === 0) return [];
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const user = session?.user;
+  if (!user) {
+    throw new Error('You are not signed in.');
+  }
+  if (!accountId) {
+    throw new Error('Your profile is not linked to an account.');
+  }
+
+  // De-duplicate within the CSV on the NORMALIZED number — the same
+  // key the DB's UNIQUE (account_id, phone_normalized) index uses
+  // (migration 022). Keyed on the raw string instead, "+1 555-0100"
+  // and "15550100" survived as two rows and the insert below died on
+  // a 23505, failing the whole broadcast.
+  const uniqueByKey = new Map<string, { phone: string; name?: string }>();
+  for (const row of csvRows) {
+    const key = normalizeKey(row.phone);
+    if (key && !uniqueByKey.has(key)) uniqueByKey.set(key, row);
+  }
+  const keys = [...uniqueByKey.keys()];
+
+  // Single round-trip lookup of the contacts already in this ACCOUNT.
+  // Scoping to `user_id` missed rows a teammate created on a shared
+  // account, so those numbers looked new and their inserts collided
+  // with the account-wide unique index.
+  const { data: existing, error: lookupErr } = await supabase
+    .from('contacts')
+    .select('*')
+    .eq('account_id', accountId)
+    .in('phone_normalized', keys);
+  if (lookupErr) {
+    throw new Error(`Failed to look up CSV contacts: ${lookupErr.message}`);
+  }
+
+  const byKey = new Map<string, Contact>();
+  for (const c of (existing ?? []) as Contact[]) {
+    const key = normalizeKey(c.phone ?? '');
+    if (key) byKey.set(key, c);
+  }
+
+  // Insert only missing contacts, in one batch per 200 rows (PostgREST
+  // has a default payload cap — 200 keeps individual requests small).
+  const missing = keys
+    .filter((k) => !byKey.has(k))
+    .map((k) => uniqueByKey.get(k)!)
+    .map((row) => ({
+      user_id: user.id,
+      account_id: accountId,
+      phone: row.phone,
+      name: row.name ?? null,
+    }));
+
+  const INSERT_CHUNK = 200;
+  for (let i = 0; i < missing.length; i += INSERT_CHUNK) {
+    const chunk = missing.slice(i, i + INSERT_CHUNK);
+    const { data: inserted, error: insertErr } = await supabase
+      .from('contacts')
+      .insert(chunk)
+      .select();
+    if (insertErr) {
+      throw new Error(`Failed to create CSV contacts: ${insertErr.message}`);
+    }
+    for (const c of (inserted ?? []) as Contact[]) {
+      const key = normalizeKey(c.phone ?? '');
+      if (key) byKey.set(key, c);
+    }
+  }
+
+  // Preserve input order so analytics roughly matches the CSV order.
+  // A number that belongs to a staff contact is dropped.
+  return keys
+    .map((k) => byKey.get(k))
+    .filter(
+      (c): c is Contact =>
+        Boolean(c) && !(c as Contact & { is_staff?: boolean }).is_staff,
+    );
+}
+
+async function resolveCustomFieldAudience(
+  supabase: ReturnType<typeof createClient>,
+  filter: CustomFieldFilter,
+): Promise<Contact[]> {
+  const { fieldId, operator, value } = filter;
+
+  // Build the WHERE clause for the operator. PostgREST supports
+  // eq/neq/ilike via the query builder — use ilike with wildcards
+  // for "contains" so the match is case-insensitive.
+  let query = supabase
+    .from('contact_custom_values')
+    .select('contact_id')
+    .eq('custom_field_id', fieldId);
+
+  if (operator === 'is') query = query.eq('value', value);
+  else if (operator === 'is_not') query = query.neq('value', value);
+  else if (operator === 'contains') query = query.ilike('value', `%${value}%`);
+
+  const { data: matches, error: matchErr } = await query;
+  if (matchErr)
+    throw new Error(`Custom-field filter failed: ${matchErr.message}`);
+
+  const contactIds = [...new Set((matches ?? []).map((m) => m.contact_id))];
+  if (contactIds.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from('contacts')
+    .select('*')
+    .eq('is_staff', false)
+    .in('id', contactIds);
+  if (error) throw new Error(`Failed to fetch contacts: ${error.message}`);
+  return data ?? [];
+}
+
+
 export function useBroadcastSending(): UseBroadcastSendingReturn {
   const { accountId } = useAuth();
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
-
-  async function resolveAudience(audience: AudienceConfig): Promise<Contact[]> {
-    const supabase = createClient();
-
-    let contacts: Contact[] = [];
-
-    if (audience.type === 'all') {
-      const { data, error } = await supabase.from('contacts').select('*');
-      if (error) throw new Error(`Failed to fetch contacts: ${error.message}`);
-      contacts = data ?? [];
-    } else if (
-      audience.type === 'tags' &&
-      audience.tagIds &&
-      audience.tagIds.length > 0
-    ) {
-      const { data: contactTags, error: tagError } = await supabase
-        .from('contact_tags')
-        .select('contact_id')
-        .in('tag_id', audience.tagIds);
-
-      if (tagError)
-        throw new Error(`Failed to fetch contact tags: ${tagError.message}`);
-
-      if (contactTags && contactTags.length > 0) {
-        const uniqueContactIds = [
-          ...new Set(contactTags.map((ct) => ct.contact_id)),
-        ];
-        const { data, error } = await supabase
-          .from('contacts')
-          .select('*')
-          .in('id', uniqueContactIds);
-        if (error) throw new Error(`Failed to fetch contacts: ${error.message}`);
-        contacts = data ?? [];
-      }
-    } else if (audience.type === 'custom_field' && audience.customField) {
-      contacts = await resolveCustomFieldAudience(supabase, audience.customField);
-    } else if (audience.type === 'csv' && audience.csvContacts) {
-      contacts = await upsertCsvContacts(supabase, audience.csvContacts);
-    }
-
-    // Apply exclude tags (works across all contact-derived audience
-    // types). CSV contacts are synthetic so exclusion doesn't apply.
-    if (audience.excludeTagIds && audience.excludeTagIds.length > 0) {
-      const { data: excludeRows } = await supabase
-        .from('contact_tags')
-        .select('contact_id')
-        .in('tag_id', audience.excludeTagIds);
-      const excludedIds = new Set((excludeRows ?? []).map((r) => r.contact_id));
-      contacts = contacts.filter((c) => !excludedIds.has(c.id));
-    }
-
-    return contacts;
-  }
-
-  /**
-   * CSV uploads arrive as raw phone/name pairs, not DB rows. Before we
-   * can insert broadcast_recipients (whose contact_id FKs contacts.id),
-   * we need real contacts.id UUIDs. So: look up each CSV phone in the
-   * caller's contacts table; insert any that don't exist; return the
-   * resolved set.
-   *
-   * Pre-existing implementation synthesized `csv-N` strings as
-   * contact_id, which failed the UUID cast on insert — every CSV
-   * broadcast silently created zero recipients.
-   *
-   * Matching is on the normalized number throughout, so it agrees with
-   * the account-wide unique index rather than colliding with it.
-   */
-  async function upsertCsvContacts(
-    supabase: ReturnType<typeof createClient>,
-    csvRows: { phone: string; name?: string }[],
-  ): Promise<Contact[]> {
-    if (csvRows.length === 0) return [];
-
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    const user = session?.user;
-    if (!user) {
-      throw new Error('You are not signed in.');
-    }
-    if (!accountId) {
-      throw new Error('Your profile is not linked to an account.');
-    }
-
-    // De-duplicate within the CSV on the NORMALIZED number — the same
-    // key the DB's UNIQUE (account_id, phone_normalized) index uses
-    // (migration 022). Keyed on the raw string instead, "+1 555-0100"
-    // and "15550100" survived as two rows and the insert below died on
-    // a 23505, failing the whole broadcast.
-    const uniqueByKey = new Map<string, { phone: string; name?: string }>();
-    for (const row of csvRows) {
-      const key = normalizeKey(row.phone);
-      if (key && !uniqueByKey.has(key)) uniqueByKey.set(key, row);
-    }
-    const keys = [...uniqueByKey.keys()];
-
-    // Single round-trip lookup of the contacts already in this ACCOUNT.
-    // Scoping to `user_id` missed rows a teammate created on a shared
-    // account, so those numbers looked new and their inserts collided
-    // with the account-wide unique index.
-    const { data: existing, error: lookupErr } = await supabase
-      .from('contacts')
-      .select('*')
-      .eq('account_id', accountId)
-      .in('phone_normalized', keys);
-    if (lookupErr) {
-      throw new Error(`Failed to look up CSV contacts: ${lookupErr.message}`);
-    }
-
-    const byKey = new Map<string, Contact>();
-    for (const c of (existing ?? []) as Contact[]) {
-      const key = normalizeKey(c.phone ?? '');
-      if (key) byKey.set(key, c);
-    }
-
-    // Insert only missing contacts, in one batch per 200 rows (PostgREST
-    // has a default payload cap — 200 keeps individual requests small).
-    const missing = keys
-      .filter((k) => !byKey.has(k))
-      .map((k) => uniqueByKey.get(k)!)
-      .map((row) => ({
-        user_id: user.id,
-        account_id: accountId,
-        phone: row.phone,
-        name: row.name ?? null,
-      }));
-
-    const INSERT_CHUNK = 200;
-    for (let i = 0; i < missing.length; i += INSERT_CHUNK) {
-      const chunk = missing.slice(i, i + INSERT_CHUNK);
-      const { data: inserted, error: insertErr } = await supabase
-        .from('contacts')
-        .insert(chunk)
-        .select();
-      if (insertErr) {
-        throw new Error(`Failed to create CSV contacts: ${insertErr.message}`);
-      }
-      for (const c of (inserted ?? []) as Contact[]) {
-        const key = normalizeKey(c.phone ?? '');
-        if (key) byKey.set(key, c);
-      }
-    }
-
-    // Preserve input order so analytics roughly matches the CSV order.
-    return keys
-      .map((k) => byKey.get(k))
-      .filter((c): c is Contact => Boolean(c));
-  }
-
-  async function resolveCustomFieldAudience(
-    supabase: ReturnType<typeof createClient>,
-    filter: CustomFieldFilter,
-  ): Promise<Contact[]> {
-    const { fieldId, operator, value } = filter;
-
-    // Build the WHERE clause for the operator. PostgREST supports
-    // eq/neq/ilike via the query builder — use ilike with wildcards
-    // for "contains" so the match is case-insensitive.
-    let query = supabase
-      .from('contact_custom_values')
-      .select('contact_id')
-      .eq('custom_field_id', fieldId);
-
-    if (operator === 'is') query = query.eq('value', value);
-    else if (operator === 'is_not') query = query.neq('value', value);
-    else if (operator === 'contains') query = query.ilike('value', `%${value}%`);
-
-    const { data: matches, error: matchErr } = await query;
-    if (matchErr)
-      throw new Error(`Custom-field filter failed: ${matchErr.message}`);
-
-    const contactIds = [...new Set((matches ?? []).map((m) => m.contact_id))];
-    if (contactIds.length === 0) return [];
-
-    const { data, error } = await supabase
-      .from('contacts')
-      .select('*')
-      .in('id', contactIds);
-    if (error) throw new Error(`Failed to fetch contacts: ${error.message}`);
-    return data ?? [];
-  }
 
   async function createAndSendBroadcast(payload: BroadcastPayload): Promise<string> {
     setIsProcessing(true);
@@ -542,7 +409,7 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
 
       // ── Step 1: Resolve audience contacts ─────────────────────────
       setProgress(5);
-      const contacts = await resolveAudience(payload.audience);
+      const contacts = await resolveAudience(supabase, accountId, payload.audience);
 
       if (contacts.length === 0) {
         throw new Error('No contacts found for this audience.');
