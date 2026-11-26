@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole, toErrorResponse } from '@/lib/auth/account'
 import { supabaseAdmin } from '@/lib/flows/admin-client'
+import { replaceFlowNodes } from '@/lib/flows/service'
 
 /**
  * GET   /api/flows/[id]  — fetch one flow with its nodes.
@@ -146,27 +147,9 @@ export async function PUT(
   if (body.nodes !== undefined) {
     // Delete-then-insert. Not transactional but the runner handles
     // mid-edit reads safely (a node_not_found ends the run cleanly).
-    const { error: delErr } = await admin
-      .from('flow_nodes')
-      .delete()
-      .eq('flow_id', id)
-    if (delErr) {
-      return NextResponse.json({ error: delErr.message }, { status: 500 })
-    }
-    if (body.nodes.length > 0) {
-      const { error: insErr } = await admin.from('flow_nodes').insert(
-        body.nodes.map((n) => ({
-          flow_id: id,
-          node_key: n.node_key,
-          node_type: n.node_type,
-          config: n.config,
-          position_x: n.position_x ?? 0,
-          position_y: n.position_y ?? 0,
-        })),
-      )
-      if (insErr) {
-        return NextResponse.json({ error: insErr.message }, { status: 500 })
-      }
+    const nodesErr = await replaceFlowNodes(admin, id, body.nodes)
+    if (nodesErr) {
+      return NextResponse.json({ error: nodesErr }, { status: 500 })
     }
   }
 

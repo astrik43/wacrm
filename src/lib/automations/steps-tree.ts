@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabaseAdmin } from './admin-client'
 
 // ------------------------------------------------------------
@@ -36,19 +37,21 @@ const uid = () =>
 export async function replaceSteps(
   automationId: string,
   input: BuilderStepInput[],
+  db?: SupabaseClient,
 ): Promise<string | null> {
-  const admin = supabaseAdmin()
+  const admin = db ?? supabaseAdmin()
   const { error: delErr } = await admin
     .from('automation_steps')
     .delete()
     .eq('automation_id', automationId)
   if (delErr) return delErr.message
-  return insertSteps(automationId, input)
+  return insertSteps(automationId, input, admin)
 }
 
 export async function insertSteps(
   automationId: string,
   input: BuilderStepInput[],
+  db?: SupabaseClient,
 ): Promise<string | null> {
   if (!input || input.length === 0) return null
 
@@ -83,7 +86,7 @@ export async function insertSteps(
   walk(tree, null, null)
 
   if (rows.length === 0) return null
-  const { error } = await supabaseAdmin().from('automation_steps').insert(rows)
+  const { error } = await (db ?? supabaseAdmin()).from('automation_steps').insert(rows)
   return error?.message ?? null
 }
 
@@ -125,8 +128,11 @@ interface DbStep {
   position: number
 }
 
-export async function loadStepsTree(automationId: string): Promise<BuilderStepNode[]> {
-  const { data, error } = await supabaseAdmin()
+export async function loadStepsTree(
+  automationId: string,
+  db?: SupabaseClient,
+): Promise<BuilderStepNode[]> {
+  const { data, error } = await (db ?? supabaseAdmin())
     .from('automation_steps')
     .select('*')
     .eq('automation_id', automationId)
