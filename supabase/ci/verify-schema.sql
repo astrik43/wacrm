@@ -239,6 +239,16 @@ BEGIN
       'contacts.is_staff is missing — migration 055 did not apply';
   END IF;
 
+  -- Ops settings + NDR requests (056). NDR sends are gated on
+  -- ops_settings.ndr_enabled; ndr_requests' unique key stops a second
+  -- NDR for the same order.
+  IF to_regclass('public.ops_settings') IS NULL
+     OR to_regclass('public.ndr_requests') IS NULL
+     OR to_regclass('public.ndr_requests_account_order_key') IS NULL THEN
+    RAISE EXCEPTION
+      'ops_settings / ndr_requests are missing — migration 056 did not apply';
+  END IF;
+
   RAISE NOTICE 'schema verification passed';
 END
 $$;

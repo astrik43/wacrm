@@ -32,6 +32,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { isStaffPhone } from '@/lib/ops/staff';
 import { resolveConversationByPhone } from '@/lib/whatsapp/resolve-conversation';
 import {
   sendMessageToConversation,
@@ -181,7 +182,7 @@ export async function pickEventSteps(
  * customer who never got anything. Remove it while it is still empty;
  * the contact stays (it carries the Shopify customer's details).
  */
-async function dropIfEmpty(
+export async function dropIfEmpty(
   db: SupabaseClient,
   accountId: string,
   conversationId: string
@@ -230,6 +231,14 @@ export async function deliverNotification(
   };
 
   if (!input.phone) return skip('no_phone');
+  // Team members are not customers: no order updates, cart reminders or
+  // follow-ups (a "Send test" goes to the admin's chosen number as is).
+  if (
+    input.testGuard !== 'bypass' &&
+    (await isStaffPhone(db, accountId, input.phone))
+  ) {
+    return skip('staff_contact');
+  }
   if (input.testGuard !== 'bypass') {
     const guard = input.testGuard ?? (await loadTestGuard(db, accountId));
     if (!guard) {
