@@ -834,7 +834,15 @@
         "estimatedReach": "Alcance estimado",
         "language": "Idioma",
         "confirmTitle": "Confirmar difusión",
-        "confirmDesc": "Estás a punto de enviar esta difusión a <b>{count, number}</b> {count, plural, =1 {contacto} other {contactos}} con la plantilla <b>{template}</b>. Esta acción no se puede deshacer."
+        "confirmDesc": "Estás a punto de enviar esta difusión a <b>{count, number}</b> {count, plural, =1 {contacto} other {contactos}} con la plantilla <b>{template}</b>. Esta acción no se puede deshacer.",
+        "sendTest": "Enviar prueba",
+        "testTitle": "Enviar un mensaje de prueba",
+        "testDesc": "Envía este mensaje a un número ahora mismo, para que lo revises en tu teléfono. No forma parte de la difusión y nadie más lo recibe.",
+        "testPhonePlaceholder": "Número con código de país, p. ej. 919876543210",
+        "testSend": "Enviar prueba",
+        "testSent": "Prueba enviada a {phone}",
+        "testSentNoContact": "Prueba enviada a {phone}. Ese número no es un contacto, así que las variables de nombre muestran \"Test\".",
+        "testFailed": "La prueba falló: {error}"
       }
     }
   },
