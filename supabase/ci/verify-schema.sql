@@ -222,6 +222,33 @@ BEGIN
       'shopify_configs.shiprocket_* columns are missing — migration 053 did not apply';
   END IF;
 
+  -- MCP audit log (054). Written by the MCP endpoint on every
+  -- non-read tool call; the idempotency index makes retries safe.
+  IF to_regclass('public.mcp_audit_log') IS NULL THEN
+    RAISE EXCEPTION
+      'mcp_audit_log is missing — migration 054 did not apply';
+  END IF;
+
+  -- Staff flag (055). Read by the audience resolvers and every
+  -- marketing path to leave the internal team out.
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'contacts' AND column_name = 'is_staff'
+  ) THEN
+    RAISE EXCEPTION
+      'contacts.is_staff is missing — migration 055 did not apply';
+  END IF;
+
+  -- Ops settings + NDR requests (056). NDR sends are gated on
+  -- ops_settings.ndr_enabled; ndr_requests' unique key stops a second
+  -- NDR for the same order.
+  IF to_regclass('public.ops_settings') IS NULL
+     OR to_regclass('public.ndr_requests') IS NULL
+     OR to_regclass('public.ndr_requests_account_order_key') IS NULL THEN
+    RAISE EXCEPTION
+      'ops_settings / ndr_requests are missing — migration 056 did not apply';
+  END IF;
+
   RAISE NOTICE 'schema verification passed';
 END
 $$;

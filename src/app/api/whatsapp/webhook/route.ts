@@ -26,6 +26,7 @@ import { runAutomationsForTrigger } from '@/lib/automations/engine'
 import { dispatchInboundToFlows } from '@/lib/flows/engine'
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply'
 import { dispatchWebhookEvent } from '@/lib/webhooks/deliver'
+import { handleNdrReply } from '@/lib/ops/ndr'
 import {
   handleTemplateWebhookChange,
   isTemplateWebhookField,
@@ -903,6 +904,16 @@ async function processMessage(
   // trigger installed in migration 003).
   await flagBroadcastReplyIfAny(accountId, contactRecord.id)
 
+  // NDR (non-delivery) reply: "1" / "2" or a button tap answering the
+  // message we sent for a failed delivery. Records the answer, tags the
+  // contact and emits `ndr.reply`; never throws.
+  const ndrHandled = await handleNdrReply(supabaseAdmin(), {
+    accountId,
+    contactId: contactRecord.id,
+    text: contentText,
+    interactiveReplyId,
+  })
+
   // Phone / installed-app notification for every device in the account
   // that turned them on. One notification per chat: a newer message
   // replaces the older one instead of stacking.
@@ -1024,7 +1035,7 @@ async function processMessage(
   // the account has enabled it. Awaited inside `after()` (same reason as
   // the webhook dispatch below); `dispatchInboundToAiReply` owns its
   // eligibility gates + try/catch and never throws.
-  if (!flowConsumed && !interactiveReplyId && inboundText.trim()) {
+  if (!flowConsumed && !ndrHandled && !interactiveReplyId && inboundText.trim()) {
     await dispatchInboundToAiReply({
       accountId,
       conversationId: conversation.id,
@@ -1050,6 +1061,15 @@ async function processMessage(
     content_type: contentType,
     text: contentText,
   })
+  if (interactiveReplyId) {
+    await dispatchWebhookEvent(supabaseAdmin(), accountId, 'message.button_reply', {
+      conversation_id: conversation.id,
+      contact_id: contactRecord.id,
+      whatsapp_message_id: message.id,
+      reply_id: interactiveReplyId,
+      title: contentText,
+    })
+  }
 }
 
 async function parseMessageContent(

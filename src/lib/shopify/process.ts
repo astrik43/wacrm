@@ -56,6 +56,7 @@ import {
   orderPlacedTags,
   orderRtoTags,
 } from './auto-tags';
+import { maybeSendNdr, NDR_SHIPMENT_STATUSES } from '@/lib/ops/ndr';
 import { makeLinkCode } from './link-codes';
 import { pickOrderPhone } from './phone';
 import { orderRefOf } from './webhook-log';
@@ -577,7 +578,14 @@ async function handleFulfillment(
   // a returned COD order is usually cancelled afterwards.
   const returned =
     next.shipmentStatus === 'failure' && prev?.shipmentStatus !== 'failure';
-  if (events.length === 0 && !returned) {
+  // A failed delivery attempt (or the final "not delivered"): the NDR
+  // message asks the customer what to do. Off unless the account
+  // enabled it in ops settings; once per order.
+  const ndrTrigger =
+    !!next.shipmentStatus &&
+    NDR_SHIPMENT_STATUSES.includes(next.shipmentStatus) &&
+    prev?.shipmentStatus !== next.shipmentStatus;
+  if (events.length === 0 && !returned && !ndrTrigger) {
     return { orderRef: fallbackRef, note: 'no_change', outcomes: [] };
   }
 
@@ -599,6 +607,12 @@ async function handleFulfillment(
       order?.customer_name ?? fulfillmentFields.customer_name ?? null,
       orderRtoTags()
     );
+  }
+  if (ndrTrigger && !order?.cancelled_at) {
+    await maybeSendNdr(db, accountId, {
+      orderName: order?.order_name ?? fulfillmentFields.order_number ?? null,
+      phone,
+    });
   }
   if (events.length === 0) {
     return {

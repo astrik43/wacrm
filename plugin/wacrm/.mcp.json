@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "wacrm": {
+      "type": "http",
+      "url": "${WACRM_MCP_URL}",
+      "headers": {
+        "Authorization": "Bearer ${WACRM_API_KEY}"
+      }
+    }
+  }
+}

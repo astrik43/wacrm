@@ -226,6 +226,22 @@ export function ContactDetailView({
     setSavingDetails(false);
   }
 
+  async function toggleStaff() {
+    if (!contactId || !contact) return;
+    const next = !contact.is_staff;
+    const { error } = await supabase
+      .from('contacts')
+      .update({ is_staff: next, updated_at: new Date().toISOString() })
+      .eq('id', contactId);
+    if (error) {
+      toast.error(t('toastStaffFailed'));
+      return;
+    }
+    toast.success(next ? t('toastStaffOn') : t('toastStaffOff'));
+    fetchContact();
+    onUpdated();
+  }
+
   async function toggleTag(tagId: string) {
     if (!contactId) return;
     setSavingTags(true);
@@ -401,6 +417,11 @@ export function ContactDetailView({
                 <div className="flex-1 min-w-0">
                   <SheetTitle className="text-popover-foreground truncate">
                     {contact.name || t('unnamed')}
+                    {contact.is_staff && (
+                      <Badge variant="secondary" className="ml-2 align-middle">
+                        {t('staffBadge')}
+                      </Badge>
+                    )}
                   </SheetTitle>
                   <SheetDescription className="text-muted-foreground text-xs mt-0.5">
                     {t('contactDetailsDesc')}
@@ -446,6 +467,14 @@ export function ContactDetailView({
                     <LayoutTemplate className="size-4" />
                   )}
                   {t('sendTemplateBtn')}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={toggleStaff}
+                  className="ml-2"
+                >
+                  {contact.is_staff ? t('unmarkStaff') : t('markStaff')}
                 </Button>
               </div>
             </SheetHeader>

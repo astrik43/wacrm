@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole, toErrorResponse } from '@/lib/auth/account'
 import { supabaseAdmin } from '@/lib/flows/admin-client'
-import { validateFlowForActivation } from '@/lib/flows/validate'
+import { validateStoredFlow } from '@/lib/flows/service'
 
 /**
  * POST /api/flows/[id]/activate
@@ -66,34 +66,10 @@ export async function POST(
   const admin = supabaseAdmin()
 
   if (status === 'active') {
-    // Re-load with the full payload the validator needs.
-    const [{ data: flow }, { data: nodes }] = await Promise.all([
-      admin
-        .from('flows')
-        .select('name, trigger_type, trigger_config, entry_node_id')
-        .eq('id', id)
-        .maybeSingle(),
-      admin
-        .from('flow_nodes')
-        .select('node_key, node_type, config')
-        .eq('flow_id', id),
-    ])
-    if (!flow) {
+    const issues = await validateStoredFlow(admin, id)
+    if (!issues) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }
-    const issues = validateFlowForActivation(
-      flow as {
-        name: string
-        trigger_type: 'keyword' | 'first_inbound_message' | 'manual'
-        trigger_config: Record<string, unknown>
-        entry_node_id: string | null
-      },
-      (nodes ?? []) as Array<{
-        node_key: string
-        node_type: string
-        config: Record<string, unknown>
-      }>,
-    )
     const blockers = issues.filter((i) => i.severity === 'error')
     if (blockers.length > 0) {
       return NextResponse.json(
