@@ -744,7 +744,9 @@
         "subtitle": "Select an approved message template for your broadcast.",
         "noTemplates": "No templates available.",
         "createFirst": "Create a template in Settings first.",
-        "errorLoad": "Failed to load templates"
+        "errorLoad": "Failed to load templates",
+        "searchPlaceholder": "Search templates by name or message",
+        "noMatches": "No templates match \"{query}\""
       },
       "selectAudience": {
         "title": "Select Audience",

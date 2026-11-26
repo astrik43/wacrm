@@ -738,7 +738,9 @@
         "subtitle": "Selecione um modelo de mensagem aprovado para o seu disparo.",
         "noTemplates": "Nenhum modelo disponível.",
         "createFirst": "Crie um modelo em Configurações primeiro.",
-        "errorLoad": "Falha ao carregar os modelos"
+        "errorLoad": "Falha ao carregar os modelos",
+        "searchPlaceholder": "Buscar modelos por nome ou mensagem",
+        "noMatches": "Nenhum modelo corresponde a \"{query}\""
       },
       "selectAudience": {
         "title": "Selecionar público",

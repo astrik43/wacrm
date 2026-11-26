@@ -738,7 +738,9 @@
         "subtitle": "Selecciona una plantilla de mensaje aprobada para tu difusión.",
         "noTemplates": "No hay plantillas disponibles.",
         "createFirst": "Primero crea una plantilla en Configuración.",
-        "errorLoad": "Error al cargar las plantillas"
+        "errorLoad": "Error al cargar las plantillas",
+        "searchPlaceholder": "Buscar plantillas por nombre o mensaje",
+        "noMatches": "Ninguna plantilla coincide con \"{query}\""
       },
       "selectAudience": {
         "title": "Seleccionar audiencia",
