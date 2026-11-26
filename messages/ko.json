@@ -744,7 +744,9 @@
         "subtitle": "브로드캐스트에 사용할 승인된 메시지 템플릿을 선택하세요.",
         "noTemplates": "사용 가능한 템플릿이 없습니다.",
         "createFirst": "먼저 설정에서 템플릿을 만드세요.",
-        "errorLoad": "템플릿을 불러오지 못했습니다"
+        "errorLoad": "템플릿을 불러오지 못했습니다",
+        "searchPlaceholder": "이름 또는 메시지로 템플릿 검색",
+        "noMatches": "\"{query}\"와(과) 일치하는 템플릿이 없습니다"
       },
       "selectAudience": {
         "title": "대상 선택",
