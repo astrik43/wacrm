@@ -7,6 +7,7 @@ import {
   BATCH_SEND_ATTEMPTS,
   batchRetryDelayMs,
 } from '@/lib/broadcast-retry';
+import { toStoredTemplateVariables } from '@/lib/broadcast-template-variables';
 import { normalizeKey } from '@/lib/contacts/dedupe';
 import {
   parseRecipientParams,
@@ -557,7 +558,11 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
           name: payload.name,
           template_name: payload.template.name,
           template_language: payload.template.language ?? 'en_US',
-          template_variables: payload.variables,
+          template_variables: toStoredTemplateVariables({
+            variables: payload.variables,
+            buttonVariables,
+            headerMediaUrl: headerMediaUrl ?? '',
+          }),
           audience_filter: {
             type: payload.audience.type,
             tagIds: payload.audience.tagIds,

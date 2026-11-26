@@ -669,6 +669,7 @@
     "detail": {
       "backToBroadcasts": "Volver a difusiones",
       "notFound": "Difusión no encontrada",
+      "testTemplateMissing": "La plantilla de esta difusión ya no existe, así que no se puede enviar una prueba.",
       "template": "Plantilla: {name}",
       "createdAt": "Creada el {date}",
       "deletePrompt": "¿Eliminar esta difusión?",

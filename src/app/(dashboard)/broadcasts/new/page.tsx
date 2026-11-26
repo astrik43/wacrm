@@ -15,6 +15,7 @@ import {
   type ButtonVariables,
 } from '@/hooks/use-broadcast-sending';
 import { Check } from 'lucide-react';
+import { toStoredTemplateVariables } from '@/lib/broadcast-template-variables';
 import { useTranslations } from 'next-intl';
 
 const steps = [
@@ -112,7 +113,11 @@ export default function NewBroadcastPage() {
       name: name.trim(),
       template_name: template.name,
       template_language: template.language ?? 'en_US',
-      template_variables: variables,
+      template_variables: toStoredTemplateVariables({
+        variables,
+        buttonVariables,
+        headerMediaUrl,
+      }),
       audience_filter: {
         type: audience.type,
         tagIds: audience.tagIds,

@@ -14,17 +14,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { ArrowLeft, Send, Loader2, Users, Save, FlaskConical } from 'lucide-react';
+import { ArrowLeft, Send, Loader2, Users, Save } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { toast } from 'sonner';
-import {
-  sendTestMessage,
-  type ButtonVariables,
-  type VariableMapping,
-} from '@/hooks/use-broadcast-sending';
-
-/** The last number a test went to, remembered on this device. */
-const TEST_PHONE_KEY = 'broadcast-test-phone';
+import type { ButtonVariables, VariableMapping } from '@/hooks/use-broadcast-sending';
+import { SendTestDialog } from './send-test-dialog';
 
 interface AudienceConfig {
   type: string;
@@ -65,53 +58,6 @@ export function Step4ScheduleSend({
   const [showConfirm, setShowConfirm] = useState(false);
   const [estimatedReach, setEstimatedReach] = useState<number>(0);
   const [loadingReach, setLoadingReach] = useState(true);
-  const [showTest, setShowTest] = useState(false);
-  const [testPhone, setTestPhone] = useState('');
-  const [testSending, setTestSending] = useState(false);
-
-  useEffect(() => {
-    try {
-      setTestPhone(localStorage.getItem(TEST_PHONE_KEY) ?? '');
-    } catch {
-      // Storage unavailable — the field just starts empty.
-    }
-  }, []);
-
-  async function handleSendTest() {
-    const phone = testPhone.trim();
-    if (!phone) return;
-    setTestSending(true);
-    try {
-      const result = await sendTestMessage({
-        template,
-        variables,
-        buttonVariables,
-        headerMediaUrl,
-        phone,
-      });
-      if (!result.ok) {
-        toast.error(t('scheduleSend.testFailed', { error: result.error }));
-        return;
-      }
-      try {
-        localStorage.setItem(TEST_PHONE_KEY, phone);
-      } catch {
-        // Not remembering the number is fine.
-      }
-      toast.success(
-        result.contactFound
-          ? t('scheduleSend.testSent', { phone })
-          : t('scheduleSend.testSentNoContact', { phone })
-      );
-      setShowTest(false);
-    } catch (err) {
-      const error = err instanceof Error ? err.message : 'Unknown error';
-      toast.error(t('scheduleSend.testFailed', { error }));
-    } finally {
-      setTestSending(false);
-    }
-  }
-
   useEffect(() => {
     async function calculateReach() {
       setLoadingReach(true);
@@ -236,59 +182,13 @@ export function Step4ScheduleSend({
         </Button>
 
         <div className="flex items-center gap-2">
-          <Dialog open={showTest} onOpenChange={setShowTest}>
-            <DialogTrigger
-              render={
-                <Button
-                  variant="outline"
-                  disabled={isProcessing}
-                  className="border-border text-muted-foreground hover:bg-muted disabled:opacity-50"
-                />
-              }
-            >
-              <FlaskConical className="h-4 w-4" />
-              {t('scheduleSend.sendTest')}
-            </DialogTrigger>
-            <DialogContent className="border-border bg-popover sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle className="text-popover-foreground">{t('scheduleSend.testTitle')}</DialogTitle>
-                <DialogDescription className="text-muted-foreground">
-                  {t('scheduleSend.testDesc')}
-                </DialogDescription>
-              </DialogHeader>
-              <Input
-                value={testPhone}
-                onChange={(e) => setTestPhone(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') void handleSendTest();
-                }}
-                placeholder={t('scheduleSend.testPhonePlaceholder')}
-                inputMode="tel"
-                className="border-border bg-muted text-foreground placeholder:text-muted-foreground"
-              />
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => setShowTest(false)}
-                  className="border-border text-muted-foreground"
-                >
-                  {t('cancel')}
-                </Button>
-                <Button
-                  onClick={() => void handleSendTest()}
-                  disabled={!testPhone.trim() || testSending}
-                  className="bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                >
-                  {testSending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Send className="h-4 w-4" />
-                  )}
-                  {t('scheduleSend.testSend')}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <SendTestDialog
+            template={template}
+            variables={variables}
+            buttonVariables={buttonVariables}
+            headerMediaUrl={headerMediaUrl}
+            disabled={isProcessing}
+          />
 
           {onSaveDraft && (
             <Button
