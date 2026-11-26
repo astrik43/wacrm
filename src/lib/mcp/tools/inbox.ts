@@ -1,5 +1,11 @@
-// MCP 2.0 — "inbox" tools. Owned by the agent building this domain: add
-// tools to this array (split into a folder if it grows). See ../CONVENTIONS.md.
+// MCP 2.0 — "inbox" tools. Split by concern under ./inbox/. See ../CONVENTIONS.md.
 import type { AnyMcpTool } from '../types';
+import { inboxManageTools } from './inbox/manage';
+import { inboxReadTools } from './inbox/read';
+import { inboxSendTools } from './inbox/send';
 
-export const inboxTools: AnyMcpTool[] = [];
+export const inboxTools: AnyMcpTool[] = [
+  ...inboxReadTools,
+  ...inboxManageTools,
+  ...inboxSendTools,
+];
