@@ -66,6 +66,7 @@ interface ContactWithTags extends Contact {
 
 export default function ContactsPage() {
   const t = useTranslations('Contacts.page');
+  const tDetail = useTranslations('Contacts.detailView');
   const supabase = createClient();
   const canEdit = useCan('send-messages');
   const canEditSettings = useCan('edit-settings');
@@ -602,6 +603,11 @@ export default function ContactsPage() {
                   </TableCell>
                   <TableCell className="text-foreground font-medium">
                     {contact.name || <span className="text-muted-foreground italic">{t('unnamed')}</span>}
+                    {contact.is_staff && (
+                      <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground">
+                        {tDetail('staffBadge')}
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell className="text-muted-foreground font-mono text-xs">
                     {contact.phone}
