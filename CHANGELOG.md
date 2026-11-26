@@ -11,6 +11,20 @@ and polish.
 
 ## [Unreleased]
 
+- **MCP 2.0: a remote MCP server and a Claude plugin.** `/api/mcp`
+  exposes 146 tools (contacts, tags, notes, inbox, templates,
+  broadcasts, deals, automations, flows, AI, Shopify, reports, ops) to
+  any MCP client that can send a bearer API key. Which tools a key sees
+  is decided by its scopes (27 new ones). Destructive tools need
+  `confirm: true`; every write tool accepts `dry_run` and
+  `idempotency_key`; every non-read call is audited (secrets, phone
+  numbers and emails are masked). New `contacts.is_staff` flag keeps
+  team members out of broadcasts and customer metrics. Optional NDR
+  message flow (off by default). The `plugin/wacrm` folder bundles the
+  connection and 14 skills. **Migrations required:** `054`
+  (`mcp_audit_log`), `055` (`contacts.is_staff`) and `056`
+  (`ops_settings`, `ndr_requests`).
+
 - **Order Delivered / Order RTO contact tags.** Customers are tagged
   when Shopify shows their shipment delivered or not delivered
   (returned), so a broadcast can target customers who actually received

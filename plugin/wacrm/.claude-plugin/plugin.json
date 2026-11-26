@@ -1,0 +1,5 @@
+{
+  "name": "wacrm",
+  "version": "0.1.0",
+  "description": "Run the wacrm WhatsApp CRM from Claude: the wacrm MCP server (146 tools) plus skills for inbox triage, broadcasts, templates, NDR, COD, RTO review, order updates, reports and more."
+}
