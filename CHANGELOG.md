@@ -12,7 +12,7 @@ and polish.
 ## [Unreleased]
 
 - **MCP 2.0: a remote MCP server and a Claude plugin.** `/api/mcp`
-  exposes 146 tools (contacts, tags, notes, inbox, templates,
+  exposes 147 tools (contacts, tags, notes, inbox, templates,
   broadcasts, deals, automations, flows, AI, Shopify, reports, ops) to
   any MCP client that can send a bearer API key. Which tools a key sees
   is decided by its scopes (27 new ones). Destructive tools need
