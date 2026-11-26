@@ -18,6 +18,9 @@ import { toApiErrorResponse } from '@/lib/api/v1/respond';
 import { createMcpServer } from '@/lib/mcp/server';
 
 export const dynamic = 'force-dynamic';
+// send_broadcast / resume_broadcast fan out up to 1000 sends after the
+// response; without this the platform may cut them off mid-send.
+export const maxDuration = 300;
 
 export async function POST(request: Request) {
   let ctx;

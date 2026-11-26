@@ -6,7 +6,10 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 import type { ToolTier } from './types';
 
-const SECRET_KEY = /secret|token|password|api[_-]?key|authorization|credential/i;
+// Secrets, plus customer contact details: an audit row should say which
+// tool ran and on what, not keep a customer's number or address.
+const SECRET_KEY =
+  /secret|token|password|api[_-]?key|authorization|credential|phone|email|address/i;
 const MAX_STRING = 500;
 const MAX_JSON_BYTES = 20_000;
 

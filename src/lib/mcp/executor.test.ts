@@ -115,6 +115,20 @@ describe('runTool', () => {
     expect(rows[0]).toMatchObject({ status: 'ok', args: { api_key: '[redacted]' } });
   });
 
+  it('keeps customer phone numbers and emails out of the audit log', async () => {
+    const { db, rows } = fakeDb();
+    const sends = defineTool({
+      name: 'send_thing',
+      description: 'x',
+      scope: 'tags:write',
+      tier: 'write',
+      input: { phone: z.string(), phones: z.array(z.string()), note: z.string() },
+      handler: async () => ({ ok: true }),
+    });
+    await runTool(sends, caller(db), { phone: '919876543210', phones: ['919000000001'], note: 'hi' });
+    expect(rows[0].args).toEqual({ phone: '[redacted]', phones: '[redacted]', note: 'hi' });
+  });
+
   it('requires confirm for a destructive tool, but not for a dry run', async () => {
     const { db, rows } = fakeDb();
     await expect(runTool(destructive, caller(db), { id: 't1' })).rejects.toBeInstanceOf(McpToolError);
